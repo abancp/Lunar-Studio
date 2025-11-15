@@ -1,4 +1,4 @@
-# LunarStudio – Lightweight Local AI Desktop App (C++ + Qt + llama.cpp)
+# LunarStudio – Lightweight Local AI Desktop App (C++ + llama.cpp)
 
 LunarStudio is a fast, privacy‑focused offline AI assistant built using **C++**, **Qt/QML**, **FAISS**, **SQLite**, and **llama.cpp**.
 It performs vector search, embedding generation, and LLM inference fully offline inside your system.
@@ -16,20 +16,7 @@ It performs vector search, embedding generation, and LLM inference fully offline
 
 ---
 
-## 📂 Project Structure
 
-project/
-├── CMakeLists.txt
-├── src/
-├── include/
-├── models/
-│   ├── all-MiniLM-L6-v2.F16.gguf
-│   ├── qwen2.5-0.5b-instruct-q8_0.gguf
-├── ic/
-├── build/
-└── README.md
-
----
 
 ## 📥 Download Required Models
 
