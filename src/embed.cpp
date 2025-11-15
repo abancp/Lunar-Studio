@@ -4,13 +4,9 @@
 #include <cmath>
 #include "embed.hpp"
 
-std::vector<float> embed(std::string text)
+std::vector<float> embed(std::string text, const char *model_path)
 {
-    text = "Represent this sentence for semantic similarity: " + text;
-
-    const char *model_path = "../models/all-MiniLM-L6-v2.F16.gguf";
-    // const std::string text = "I Love You";
-
+    // Initialize backend
     llama_backend_init();
 
     // Load model
@@ -25,11 +21,10 @@ std::vector<float> embed(std::string text)
 
     std::cout << "Model loaded successfully" << std::endl;
 
-    // Setup context - Enable pooling for embeddings
+    // Setup context
     llama_context_params ctx_params = llama_context_default_params();
     ctx_params.embeddings = true;
     ctx_params.n_ctx = 512;
-    ctx_params.pooling_type = LLAMA_POOLING_TYPE_CLS;
 
     llama_context *ctx = llama_new_context_with_model(model, ctx_params);
     if (!ctx)
@@ -41,14 +36,13 @@ std::vector<float> embed(std::string text)
     }
 
     int pooling_type = llama_pooling_type(ctx);
-    std::cout << "Model's pooling type:  " << pooling_type << std::endl;
+    std::cout << "Model's pooling type: " << pooling_type << std::endl;
     std::cout << "Context created successfully" << std::endl;
 
-    // Get vocab from model
+    // Get vocab
     const llama_vocab *vocab = llama_model_get_vocab(model);
 
-    // Tokenize
-    int32_t n_tokens_needed = -llama_tokenize(vocab, text.c_str(), text.length(), nullptr, 0, false, false);
+    int32_t n_tokens_needed = -llama_tokenize(vocab, text.c_str(), text.length(), nullptr, 0, true, true);
 
     if (n_tokens_needed <= 0)
     {
@@ -62,7 +56,7 @@ std::vector<float> embed(std::string text)
     std::cout << "Number of tokens needed: " << n_tokens_needed << std::endl;
 
     std::vector<llama_token> tokens(n_tokens_needed);
-    int32_t n_tokens = llama_tokenize(vocab, text.c_str(), text.length(), tokens.data(), tokens.size(), false, false);
+    int32_t n_tokens = llama_tokenize(vocab, text.c_str(), text.length(), tokens.data(), tokens.size(), true, true);
 
     if (n_tokens < 0)
     {
@@ -90,7 +84,6 @@ std::vector<float> embed(std::string text)
 
     std::cout << "Batch created successfully" << std::endl;
 
-    // Compute the embedding
     if (llama_encode(ctx, batch) != 0)
     {
         std::cerr << "Error: llama_encode() failed" << std::endl;
@@ -103,7 +96,6 @@ std::vector<float> embed(std::string text)
 
     std::cout << "Encoding successful" << std::endl;
 
-    // Get embeddings for sequence 0
     const float *emb = llama_get_embeddings_seq(ctx, 0);
 
     if (!emb)
@@ -122,36 +114,15 @@ std::vector<float> embed(std::string text)
     }
 
     int emb_dim = llama_n_embd(model);
-
     std::cout << "Embedding dimension: " << emb_dim << std::endl;
 
-    // Check if embedding is actually computed
-    bool all_zero = true;
-    float norm = 0.0f;
-    for (int i = 0; i < emb_dim; i++)
-    {
-        if (emb[i] != 0.0f)
-        {
-            all_zero = false;
-        }
-        norm += emb[i] * emb[i];
-    }
-    norm = std::sqrt(norm);
-
-    if (all_zero)
-    {
-        std::cout << "WARNING: All embeddings are zero!" << std::endl;
-    }
-
-    std::cout << "Embedding L2 norm: " << norm << std::endl;
-    std::cout << "Embedding :\n";
+    std::cout << "Embedding:\n";
     for (int i = 0; i < emb_dim; i++)
     {
         std::cout << emb[i] << " ";
     }
+    std::cout << "\n";
     std::vector<float> emb_vector(emb, emb + emb_dim);
-    std::cout
-        << "\n";
 
     // Cleanup
     llama_batch_free(batch);
