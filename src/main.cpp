@@ -15,7 +15,7 @@ int main()
     const std::string embed_mode_path = "models/all-MiniLM-L6-v2.F16.gguf";
     const std::string llm_model_path = "models/qwen2.5-0.5b-instruct-q8_0.gguf";
     const std::string db_path = "ic/cs/mapping.db";
-    const std::string index_path = "ic/cs/knowledge/cpp_index_ivf.index";
+    const std::string index_path = "ic/cs/cpp_index_ivf.index";
     std::string query;
     std::cout << "Prompt : ";
     std::getline(std::cin, query);
