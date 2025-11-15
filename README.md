@@ -10,7 +10,6 @@ It performs vector search, embedding generation, and LLM inference fully offline
 - Fast local inference using GGUF models  
 - Semantic search powered by FAISS  
 - Sentence embeddings with MiniLM  
-- Modern native UI built with Qt/QML  
 - Local database storage using SQLite  
 - 100% offline & private  
 - Lightweight compared to Electron or web view frameworks  
