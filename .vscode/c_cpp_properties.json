@@ -1,0 +1,29 @@
+{
+  "configurations": [
+    {
+      "name": "Linux",
+      "includePath": [
+        "${workspaceFolder}/**",
+        "${workspaceFolder}/external/llama.cpp/include",
+        "${workspaceFolder}/external/llama.cpp",
+        "${workspaceFolder}/include",
+        "${workspaceFolder}/external/llama.cpp/ggml/include",
+        "${workspaceFolder}/external/faiss",
+        "${workspaceFolder}/external/faiss/faiss",
+
+        "/usr/include/qt6",
+        "/usr/include/qt6/QtCore",
+        "/usr/include/qt6/QtGui",
+        "/usr/include/qt6/QtQml",
+        "/usr/include/qt6/QtQuick",
+        "/usr/include/qt6/QtQuickControls2"
+      ],
+      "defines": [],
+      "compilerPath": "/usr/bin/g++",
+      "cStandard": "c17",
+      "cppStandard": "c++17",
+      "intelliSenseMode": "linux-gcc-x64"
+    }
+  ],
+  "version": 4
+}
