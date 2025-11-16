@@ -5,6 +5,7 @@
 #include <cstring>
 #include "embed.hpp"
 #include "run_llm.hpp"
+#include <functional>
 
 static int N_CTX = 2048;
 static int N_BATCH = 512;
@@ -13,16 +14,10 @@ static int MAX_TOKENS_OUT = 400;
 static float TEMP = 1.0f;
 static int TOP_K = 64;
 static float TOP_P = 0.95;
-;
 static float MIN_KEEP_P = 0;
 
-std::string run_model(std::string prompt, const char *model_path, bool allowSearch, std::vector<std::string> search_results)
+std::string run_model(std::string prompt, const char *model_path, bool allowSearch, std::vector<std::string> search_results, TokenCallback token_callback)
 {
-    std::cout << "=== DEBUG: Received prompt ===" << std::endl;
-    std::cout << "Length: " << prompt.length() << " chars" << std::endl;
-    std::cout << "Content: [" << prompt << "]" << std::endl;
-    std::cout << "=============================" << std::endl;
-
     llama_backend_init();
 
     // Load model
@@ -37,7 +32,7 @@ std::string run_model(std::string prompt, const char *model_path, bool allowSear
         exit(1);
     }
 
-    std::cout << "Model loaded successfully" << std::endl;
+    // std::cout << "Model loaded successfully" << std::endl;
 
     llama_context_params ctx_params = llama_context_default_params();
     ctx_params.n_ctx = 2048;
@@ -51,7 +46,7 @@ std::string run_model(std::string prompt, const char *model_path, bool allowSear
         exit(1);
     }
 
-    std::cout << "Context created successfully" << std::endl;
+    // std::cout << "Context created successfully" << std::endl;
 
     const llama_vocab *vocab = llama_model_get_vocab(model);
 
@@ -76,15 +71,13 @@ Guidelines for search queries:
 - No question words (no what, why, how, explain, define).
 - Convert the question into the core subject.
 Examples:
-   User: "What is RAM?"      -> search("ram memory")
-   User: "Why stack vs queue?" -> search("stack queue difference")
-   User: "Explain transformers" -> search("transformer neural networks")
+"What is RAM?" -> search("ram memory")
+"Why stack vs queue?" -> search("stack queue difference")
+"Explain transformers" -> search("transformer neural networks")
 
-Rules:
-1) When using the tool, output ONLY: search("topic").
-2) Every user question should produce one search() call unless the answer is already fully known.
-3) If unsure, ALWAYS search.
-4) Never hallucinate.
+DO NOT search unless the message is clearly TYPE B.
+If the message is TYPE A, NEVER search.
+If unsure, treat the message as TYPE A.
 )SYS"
                                                 : R"SYS(
 You are LunarStudio. You now have:
@@ -100,7 +93,7 @@ Your job:
 - Keep it accurate, concise, and well-structured.
 )SYS";
 
-        std::string combined_search_results = allowSearch ?"": "1 : " + search_results[0] + "\n2 : " + search_results[1] + "\n3 : " + search_results[2] + "\n" ;
+        std::string combined_search_results = allowSearch ? "" : "1 : " + search_results[0] + "\n2 : " + search_results[1] + "\n3 : " + search_results[2] + "\n";
         std::string final_user_message = std::string("QUESTION:\n") + prompt + "\n\nSEARCH_RESULT:\n" + combined_search_results;
 
         // Create messages array with system prompt + user message
@@ -120,8 +113,8 @@ Your job:
         if (result > 0)
         {
             formatted_prompt = std::string(formatted, result);
-            std::cout << "Using chat template with system prompt. Formatted prompt:\n[" << formatted_prompt << "]" << std::endl;
-            std::cout << "Length: " << formatted_prompt.length() << " chars" << std::endl;
+            // std::cout << "Using chat template with system prompt. Formatted prompt:\n[" << formatted_prompt << "]" << std::endl;
+            // std::cout << "Length: " << formatted_prompt.length() << " chars" << std::endl;
         }
         else
         {
@@ -154,15 +147,15 @@ Your job:
         exit(1);
     }
 
-    std::cout << "Tokenized " << n_input << " tokens" << std::endl;
+    // std::cout << "Tokenized " << n_input << " tokens" << std::endl;
 
     // Debug: Print first few tokens
-    std::cout << "First tokens: ";
-    for (int i = 0; i < std::min(10, n_input); i++)
-    {
-        std::cout << tokens[i] << " ";
-    }
-    std::cout << std::endl;
+    // std::cout << "First tokens: ";
+    // for (int i = 0; i < std::min(10, n_input); i++)
+    // {
+    //     std::cout << tokens[i] << " ";
+    // }
+    // std::cout << std::endl;
 
     llama_batch batch = llama_batch_init(N_BATCH, 0, 1);
     int pos = 0;
@@ -183,7 +176,7 @@ Your job:
         batch.logits[n_input - 1] = true;
     }
 
-    std::cout << "Batch created successfully" << std::endl;
+    // std::cout << "Batch created successfully" << std::endl;
 
     // Compute the embedding
     if (llama_decode(ctx, batch) != 0)
@@ -197,7 +190,7 @@ Your job:
     }
 
     batch.n_tokens = 0;
-    std::cout << "Encoding successful" << std::endl;
+    // std::cout << "Encoding successful" << std::endl;
 
     // Create sampler chain - ORDER MATTERS!
     llama_sampler_chain_params chain_params = llama_sampler_chain_default_params();
@@ -240,7 +233,14 @@ Your job:
         {
             output.append(piece_buf, n_piece);
             std::string p(piece_buf, n_piece);
-            std::cout << p << std::flush;
+            if (token_callback)
+            {
+                token_callback(p);
+            }
+            else
+            {
+                std::cout << p << std::flush;
+            }
         }
         gen_batch.token[0] = token;
         gen_batch.pos[0] = pos;
