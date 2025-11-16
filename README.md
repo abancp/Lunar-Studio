@@ -7,16 +7,14 @@ It performs vector search, embedding generation, and LLM inference fully offline
 
 ## 🚀 Features
 
-- Fast local inference using GGUF models  
-- Semantic search powered by FAISS  
-- Sentence embeddings with MiniLM  
-- Local database storage using SQLite  
-- 100% offline & private  
-- Lightweight compared to Electron or web view frameworks  
+- Fast local inference using GGUF models
+- Semantic search powered by FAISS
+- Sentence embeddings with MiniLM
+- Local database storage using SQLite
+- 100% offline & private
+- Lightweight compared to Electron or web view frameworks
 
 ---
-
-
 
 ## 📥 Download Required Models
 
@@ -52,22 +50,22 @@ make -j$(nproc)
 ## ▶️ Running
 
 ### CLI:
-./localGPT
 
+./LunarStudio
 
 ---
 
 ## 🧠 How It Works
 
-1. Embeddings generated using MiniLM  
-2. FAISS vector search  
-3. Qwen2.5 LLM generates response  
+1. Embeddings generated using MiniLM
+2. FAISS vector search
+3. Qwen2.5 LLM generates response
 
 ---
 
 ## 🛠 Development
 
- (C++): src/*.cpp, include/*.hpp  
+(C++): src/_.cpp, include/_.hpp
 
 ---
 
@@ -76,4 +74,3 @@ make -j$(nproc)
 PRs and issues are welcome!
 
 ---
-

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(localGPT LANGUAGES CXX)
+project(LunarStudio LANGUAGES CXX)
 
 # ============================================================
 # 🧱 Project Configuration
@@ -9,16 +9,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_BUILD_TYPE Release)
 
 # ============================================================
-# 📦 Dependencies
+# 📦 Dependencies (FAISS / SQLite / BLAS / llama.cpp)
 # ============================================================
-# You already installed these system-wide under /usr/local
-#   • llama.cpp (libllama.a or .so)
-#   • FAISS (libfaiss.a or .so)
-#   • SQLite3
-#   • OpenBLAS + LAPACK
-#   • OpenMP
-#   • nlohmann-json (header-only)
-
 include_directories(/usr/local/include)
 link_directories(/usr/local/lib)
 
@@ -26,40 +18,51 @@ link_directories(/usr/local/lib)
 find_package(SQLite3 REQUIRED)
 include_directories(${SQLite3_INCLUDE_DIRS})
 
-# OpenMP (used by FAISS)
+# OpenMP (FAISS uses)
 find_package(OpenMP REQUIRED)
 
-# BLAS / LAPACK (used by FAISS)
+# BLAS + LAPACK
 find_package(BLAS REQUIRED)
 find_package(LAPACK REQUIRED)
 
-# ============================================================
-# 🧩 Include nlohmann-json (header-only)
-# ============================================================
-# For Arch: sudo pacman -S nlohmann-json
-# Header is available as <nlohmann/json.hpp>
+
+
+# JSON
 find_path(JSON_INCLUDE_DIR nlohmann/json.hpp)
 if (NOT JSON_INCLUDE_DIR)
-    message(FATAL_ERROR "nlohmann/json.hpp not found. Install with: sudo pacman -S nlohmann-json")
+    message(FATAL_ERROR "nlohmann/json.hpp not found.")
 endif()
 include_directories(${JSON_INCLUDE_DIR})
 
 # ============================================================
-# ⚙️ Build targets
+# 📦 Qt 6 (QML + Quick)
+# ============================================================
+find_package(Qt6 6.2 REQUIRED COMPONENTS Quick Qml Gui)
+
+# Enable Qt autogen features
+set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
+set(CMAKE_AUTOUIC ON)
+
+# Fix QML access path (no /qt/qml prefix)
+qt_policy(SET QTP0001 NEW)
+
+# ============================================================
+# ⚙️ Backend Executables
 # ============================================================
 
-# -----------------------------
-# Main executable: localGPT
-# -----------------------------
-add_executable(localGPT
-  src/main.cpp
-  src/embed.cpp
-  src/search.cpp
-  src/run_llm.cpp
+# ---- LunarStudio (CLI)
+add_executable(LunarStudio
+    src/main.cpp
+    src/embed.cpp
+    src/search.cpp
+    src/run_llm.cpp
+    src/utils/extract_search_query.cpp
 )
 
-target_include_directories(localGPT PRIVATE include)
-target_link_libraries(localGPT PRIVATE
+target_include_directories(LunarStudio PRIVATE include)
+target_include_directories(LunarStudio PRIVATE include/utils)
+target_link_libraries(LunarStudio PRIVATE
     llama
     faiss
     ${SQLite3_LIBRARIES}
@@ -67,18 +70,19 @@ target_link_libraries(localGPT PRIVATE
     ${BLAS_LIBRARIES}
     ${LAPACK_LIBRARIES}
 )
-target_compile_options(localGPT PRIVATE -O3 -march=native ${OpenMP_CXX_FLAGS})
-install(TARGETS localGPT DESTINATION bin)
+target_compile_options(LunarStudio PRIVATE -O3 -march=native ${OpenMP_CXX_FLAGS})
 
-# -----------------------------
-# Secondary executable: make_index
-# -----------------------------
+install(TARGETS LunarStudio DESTINATION bin)
+
+
+# ---- make_index (CLI)
 add_executable(make_index
-  src/make_index.cpp
-  src/embed.cpp
+    src/make_index.cpp
+    src/embed.cpp
 )
 
 target_include_directories(make_index PRIVATE include)
+target_include_directories(make_index PRIVATE include/utils)
 target_link_libraries(make_index PRIVATE
     llama
     faiss
@@ -88,10 +92,45 @@ target_link_libraries(make_index PRIVATE
     ${LAPACK_LIBRARIES}
 )
 target_compile_options(make_index PRIVATE -O3 -march=native ${OpenMP_CXX_FLAGS})
+
 install(TARGETS make_index DESTINATION bin)
 
+
 # ============================================================
-# ✅ Optional: clean deprecation warnings from llama.cpp
+# ⚙️ Qt GUI Executable + QML Module
 # ============================================================
-target_compile_options(localGPT PRIVATE -Wno-deprecated-declarations)
-target_compile_options(make_index PRIVATE -Wno-deprecated-declarations)
+
+qt_add_executable(LunarStudio_gui
+    src/gui_main.cpp
+)
+
+# **IMPORTANT: use relative paths inside your source tree**
+qt_add_qml_module(LunarStudio_gui
+    URI LunarStudioUI
+    VERSION 1.0
+    RESOURCE_PREFIX "/"                 # ensures qrc:/LunarStudioUI/ path
+    QML_FILES
+        src/qml/Main.qml                    # use RELATIVE PATH, NOT absolute
+)
+
+target_link_libraries(LunarStudio_gui PRIVATE
+    Qt6::Quick
+    Qt6::Qml
+    Qt6::Gui
+    llama
+    faiss
+    ${SQLite3_LIBRARIES}
+    ${OpenMP_CXX_LIBRARIES}
+    ${BLAS_LIBRARIES}
+    ${LAPACK_LIBRARIES}
+)
+
+target_compile_options(LunarStudio_gui PRIVATE -O3 -march=native ${OpenMP_CXX_FLAGS})
+
+
+# ============================================================
+# ⚠️ Deprecation warnings from llama.cpp
+# ============================================================
+foreach(target LunarStudio make_index LunarStudio_gui)
+    target_compile_options(${target} PRIVATE -Wno-deprecated-declarations)
+endforeach()

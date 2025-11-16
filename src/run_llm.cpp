@@ -64,7 +64,7 @@ std::string run_model(std::string prompt, const char *model_path, bool allowSear
         // Define system prompt
         // const char *system_prompt = "SYSTEM : You are a helpful AI assistant. Use information from given data if you need for better answer . given data : In 1614, John Napier introduced logarithms, dramatically simplifying complex calculations and inspiring early analog computing devices. In the 1820s, Charles Babbage designed the Difference Engine to automate polynomial computations and later conceptualized the Analytical Engine—a general-purpose mechanical computer featuring memory and programmable control via punched cards. Ada Lovelace, who wrote the first algorithm for this machine, is recognized as the world’s first computer programmer";
         const char *system_prompt = allowSearch ? R"SYS(
-You are localGPT, created by Aban Muhammed (AI Researcher & Engineer).
+You are LunarStudio, created by Aban Muhammed (AI Researcher & Engineer).
 
 Tool: search("query").
 
@@ -87,7 +87,7 @@ Rules:
 4) Never hallucinate.
 )SYS"
                                                 : R"SYS(
-You are localGPT. You now have:
+You are LunarStudio. You now have:
 1) The user's original QUESTION.
 2) SEARCH_RESULT containing multiple retrieved paragraphs from documents.
 
