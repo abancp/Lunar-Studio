@@ -9,7 +9,7 @@
 
 // Model paths - adjust these to your actual paths
 static const std::string EMBED_MODEL_PATH = "models/all-MiniLM-L6-v2.F16.gguf";
-static const std::string LLM_MODEL_PATH = "models/qwen2.5-0.5b-instruct-q8_0.gguf";
+static const std::string LLM_MODEL_PATH = "models/Qwen3-0.6B-Q8_0.gguf";
 static const std::string DB_PATH = "ic/cs/mapping.db";
 static const std::string INDEX_PATH = "ic/cs/cpp_index_ivf.index";
 
