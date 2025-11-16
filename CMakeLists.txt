@@ -60,6 +60,9 @@ add_executable(LunarStudio
     src/utils/extract_search_query.cpp
 )
 
+
+
+
 target_include_directories(LunarStudio PRIVATE include)
 target_include_directories(LunarStudio PRIVATE include/utils)
 target_link_libraries(LunarStudio PRIVATE
@@ -100,18 +103,32 @@ install(TARGETS make_index DESTINATION bin)
 # ⚙️ Qt GUI Executable + QML Module
 # ============================================================
 
+
 qt_add_executable(LunarStudio_gui
     src/gui_main.cpp
+    src/Engine.cpp
+    src/run_llm.cpp
+    src/search.cpp
+    src/embed.cpp
+    src/utils/extract_search_query.cpp
+    src/Engine.h
 )
+
+target_include_directories(LunarStudio_gui PRIVATE include)
+target_include_directories(LunarStudio_gui PRIVATE include/utils)
+
 
 # **IMPORTANT: use relative paths inside your source tree**
 qt_add_qml_module(LunarStudio_gui
     URI LunarStudioUI
     VERSION 1.0
-    RESOURCE_PREFIX "/"                 # ensures qrc:/LunarStudioUI/ path
+    RESOURCE_PREFIX "/"
     QML_FILES
-        src/qml/Main.qml                    # use RELATIVE PATH, NOT absolute
+        src/qml/Main.qml
+        src/qml/pages/LoadingPage.qml
+        src/qml/pages/ChatPage.qml
 )
+
 
 target_link_libraries(LunarStudio_gui PRIVATE
     Qt6::Quick

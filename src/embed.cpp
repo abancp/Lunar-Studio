@@ -19,7 +19,6 @@ std::vector<float> embed(std::string text, const char *model_path)
         exit(1);
     }
 
-    std::cout << "Model loaded successfully" << std::endl;
 
     // Setup context
     llama_context_params ctx_params = llama_context_default_params();
@@ -36,8 +35,6 @@ std::vector<float> embed(std::string text, const char *model_path)
     }
 
     int pooling_type = llama_pooling_type(ctx);
-    std::cout << "Model's pooling type: " << pooling_type << std::endl;
-    std::cout << "Context created successfully" << std::endl;
 
     // Get vocab
     const llama_vocab *vocab = llama_model_get_vocab(model);
@@ -53,7 +50,6 @@ std::vector<float> embed(std::string text, const char *model_path)
         exit(1);
     }
 
-    std::cout << "Number of tokens needed: " << n_tokens_needed << std::endl;
 
     std::vector<llama_token> tokens(n_tokens_needed);
     int32_t n_tokens = llama_tokenize(vocab, text.c_str(), text.length(), tokens.data(), tokens.size(), true, true);
@@ -69,7 +65,6 @@ std::vector<float> embed(std::string text, const char *model_path)
 
     tokens.resize(n_tokens);
 
-    std::cout << "Tokenization successful. Token count: " << n_tokens << std::endl;
 
     llama_batch batch = llama_batch_init(n_tokens, 0, 1);
     for (int i = 0; i < n_tokens; i++)
@@ -82,7 +77,6 @@ std::vector<float> embed(std::string text, const char *model_path)
     }
     batch.n_tokens = n_tokens;
 
-    std::cout << "Batch created successfully" << std::endl;
 
     if (llama_encode(ctx, batch) != 0)
     {
@@ -94,7 +88,7 @@ std::vector<float> embed(std::string text, const char *model_path)
         exit(1);
     }
 
-    std::cout << "Encoding successful" << std::endl;
+    // std::cout << "Encoding successful" << std::endl;
 
     const float *emb = llama_get_embeddings_seq(ctx, 0);
 
@@ -114,14 +108,14 @@ std::vector<float> embed(std::string text, const char *model_path)
     }
 
     int emb_dim = llama_n_embd(model);
-    std::cout << "Embedding dimension: " << emb_dim << std::endl;
+    // std::cout << "Embedding dimension: " << emb_dim << std::endl;
 
-    std::cout << "Embedding:\n";
-    for (int i = 0; i < emb_dim; i++)
-    {
-        std::cout << emb[i] << " ";
-    }
-    std::cout << "\n";
+    // std::cout << "Embedding:\n";
+    // for (int i = 0; i < emb_dim; i++)
+    // {
+    //     std::cout << emb[i] << " ";
+    // }
+    // std::cout << "\n";
     std::vector<float> emb_vector(emb, emb + emb_dim);
 
     // Cleanup

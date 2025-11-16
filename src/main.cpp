@@ -9,9 +9,24 @@
 #include <nlohmann/json.hpp>
 #include <string>
 #include <extract_search_query.hpp>
+#include "llama.h"
+
+enum llama_log_level
+{
+    LLAMA_LOG_LEVEL_ERROR = 2,
+    LLAMA_LOG_LEVEL_WARN = 3,
+    LLAMA_LOG_LEVEL_INFO = 4,
+    LLAMA_LOG_LEVEL_DEBUG = 5,
+};
+
+static void silent_logger(enum ggml_log_level level, const char *text, void *user_data)
+{
+    // Do nothing → completely silent
+}
 
 int main()
 {
+    llama_log_set(silent_logger, nullptr);
     const std::string embed_mode_path = "models/all-MiniLM-L6-v2.F16.gguf";
     const std::string llm_model_path = "models/qwen2.5-0.5b-instruct-q8_0.gguf";
     const std::string db_path = "ic/cs/mapping.db";
