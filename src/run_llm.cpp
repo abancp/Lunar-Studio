@@ -96,6 +96,8 @@ Examples:
 DO NOT search unless the message is clearly TYPE B.
 If the message is TYPE A, NEVER search.
 If unsure, treat the message as TYPE A.
+- Dont think for this . this is a simple task
+
 )SYS"
                                                 : R"SYS(
 You are LunarStudio. You now have:
@@ -131,8 +133,6 @@ Your job:
         if (result > 0)
         {
             formatted_prompt = std::string(formatted, result);
-            // std::cout << "Using chat template with system prompt. Formatted prompt:\n[" << formatted_prompt << "]" << std::endl;
-            // std::cout << "Length: " << formatted_prompt.length() << " chars" << std::endl;
         }
         else
         {
@@ -146,6 +146,13 @@ Your job:
         formatted_prompt = prompt;
         std::cout << "No chat template found, using raw prompt" << std::endl;
     }
+
+    if (allowSearch)
+    {
+        formatted_prompt += "<think>oh </think>";
+    }
+    std::cout << "Using chat template with system prompt. Formatted prompt:\n[" << formatted_prompt << "]" << std::endl;
+    std::cout << "Length: " << formatted_prompt.length() << " chars" << std::endl;
 
     int32_t n_tokens_needed = llama_tokenize(vocab, formatted_prompt.c_str(), formatted_prompt.length(), nullptr, 0, true, true);
 
