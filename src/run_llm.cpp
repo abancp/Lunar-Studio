@@ -96,7 +96,7 @@ Examples:
 DO NOT search unless the message is clearly TYPE B.
 If the message is TYPE A, NEVER search.
 If unsure, treat the message as TYPE A.
-)SYS
+)SYS"
                                                 : R"SYS(
 You are LunarStudio. You now have:
 1) The user's original QUESTION.
