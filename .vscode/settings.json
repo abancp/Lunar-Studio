@@ -6,7 +6,9 @@
         "faiss",
         "ggml",
         "gguf",
+        "INVOKABLE",
         "logits",
+        "lunarstudio",
         "nlist",
         "onnx",
         "onnxruntime",
@@ -92,6 +94,9 @@
         "valarray": "cpp",
         "variant": "cpp",
         "complex": "cpp",
-        "stdfloat": "cpp"
+        "stdfloat": "cpp",
+        "qobject": "cpp",
+        "qthread": "cpp",
+        "qmutexlocker": "cpp"
     }
 }
