@@ -1,3 +1,5 @@
+import 'package:LunarStudio/src/features/chat/presentation/panels/left_panel.dart';
+import 'package:LunarStudio/src/features/chat/presentation/panels/main_panel.dart';
 import 'package:LunarStudio/src/features/chat/presentation/panels/top_panel.dart';
 import 'package:flutter/material.dart';
 
@@ -9,7 +11,20 @@ class ChatPage extends StatelessWidget {
     return Scaffold(
       body: Column(
         children: [
-          TopPanel()
+          TopPanel(),
+          Expanded(
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 240, // side panel width
+                  child: LeftPanel(),
+                ),
+                Expanded(
+                  child: MainPanel(),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
