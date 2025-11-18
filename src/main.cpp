@@ -28,7 +28,7 @@ int main()
 {
     llama_log_set(silent_logger, nullptr);
     const std::string embed_mode_path = "models/all-MiniLM-L6-v2.F16.gguf";
-    const std::string llm_model_path = "models/qwen2.5-0.5b-instruct-q8_0.gguf";
+    const std::string llm_model_path = "models/Qwen3-0.6B-Q8_0.gguf";
     const std::string db_path = "ic/cs/mapping.db";
     const std::string index_path = "ic/cs/cpp_index_ivf.index";
     std::string query;
