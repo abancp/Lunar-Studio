@@ -1,5 +1,4 @@
 import 'dart:ffi';
-import 'dart:async';
 import 'dart:isolate';
 import 'package:ffi/ffi.dart';
 
@@ -8,69 +7,65 @@ typedef NativeGenerate = Void Function(
   Pointer<Utf8>,
   Pointer<NativeFunction<NativeCallback>>,
 );
-
 typedef NativeCallback = Void Function(Pointer<Utf8>);
 
-class LLMEngine {
-  static final LLMEngine _instance = LLMEngine._internal();
-  factory LLMEngine() => _instance;
-  LLMEngine._internal();
+late DynamicLibrary _lib;
+late void Function() _loadLLM;
+late void Function(
+  Pointer<Utf8>,
+  Pointer<NativeFunction<NativeCallback>>,
+) _generate;
 
-  late final DynamicLibrary _lib;
+late SendPort _mainSend;
 
-  late final void Function() _loadLLM;
-  late final void Function(
-    Pointer<Utf8>,
-    Pointer<NativeFunction<NativeCallback>>,
-  ) _generate;
+int _activeId = -1;
 
-  bool _loaded = false;
-  bool _modelLoaded = false;
+void _tokenTrampoline(Pointer<Utf8> ptr) {
+  final token = ptr.toDartString();
+  _mainSend.send({
+    'cmd': 'token',
+    'id': _activeId,
+    'token': token,
+  });
+}
 
-  void loadLibrary() {
-    if (_loaded) return;
+void workerMain(SendPort mainSend) async {
+  _mainSend = mainSend;
 
-    _lib = DynamicLibrary.open("/home/abancp/Projects/localGPT1.0/ui/linux/lib/liblunarstudio.so");
+  final receive = ReceivePort();
+  mainSend.send(receive.sendPort);
 
-    _loadLLM = _lib
-        .lookup<NativeFunction<NativeLoadLLM>>("load_llm")
-        .asFunction();
+  final cbPtr = Pointer.fromFunction<NativeCallback>(_tokenTrampoline);
 
-    _generate = _lib
-        .lookup<NativeFunction<NativeGenerate>>("generate")
-        .asFunction();
+  await for (final msg in receive) {
+    final cmd = msg['cmd'];
 
-    _loaded = true;
-  }
+    if (cmd == 'init') {
+      final path = msg['path'] as String;
+      _lib = DynamicLibrary.open(path);
 
-  /// Call only once per session.
-  void loadModel() {
-    loadLibrary();
-    if (_modelLoaded) return;
-    _loadLLM();
-    _modelLoaded = true;
-  }
+      _loadLLM = _lib
+          .lookup<NativeFunction<NativeLoadLLM>>("load_llm")
+          .asFunction();
+      _generate = _lib
+          .lookup<NativeFunction<NativeGenerate>>("generate")
+          .asFunction();
 
-  /// Blocking call — run inside isolate only.
-  void generate(String prompt, void Function(String tok) onToken) {
-    loadModel(); // ensure model loaded first
+      _loadLLM();
+      mainSend.send({'cmd': 'ready'});
+    }
 
-    final p = prompt.toNativeUtf8();
+    else if (cmd == 'generate') {
+      final id = msg['id'] as int;
+      final prompt = msg['prompt'] as String;
+      _activeId = id;
 
-    Zone.current.fork(zoneValues: {
-      #cb: onToken,
-    }).run(() {
-      final cbPointer =
-          Pointer.fromFunction<NativeCallback>(_tokenTrampoline);
+      final p = prompt.toNativeUtf8();
+      _generate(p, cbPtr);
+      malloc.free(p);
 
-      _generate(p, cbPointer);
-    });
-
-    malloc.free(p);
-  }
-
-  static void _tokenTrampoline(Pointer<Utf8> ptr) {
-    final cb = Zone.current[#cb] as void Function(String);
-    cb(ptr.toDartString());
+      mainSend.send({'cmd': 'done', 'id': id});
+      _activeId = -1;
+    }
   }
 }

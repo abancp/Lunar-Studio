@@ -1,9 +1,9 @@
 // lib/src/features/chat/presentation/panels/main_panel.dart
+
 import 'dart:async';
-import 'dart:isolate';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:LunarStudio/src/ffi/llm_ffi.dart';
+import 'package:LunarStudio/src/ffi/llm_engine.dart';
 
 class MainPanel extends StatefulWidget {
   const MainPanel({super.key});
@@ -17,107 +17,116 @@ class _MainPanelState extends State<MainPanel> {
   final ScrollController scrollController = ScrollController();
   final FocusNode keyboardFocus = FocusNode();
   final FocusNode textFieldFocus = FocusNode();
+  final List<_ChatMessage> messages = [];
+  
+  bool engineReady = false;
+  bool isGenerating = false;
+  
+  // Batch updates for smoother rendering
+  Timer? _scrollTimer;
+  int _tokensSinceScroll = 0;
 
-  bool modelInitialized = false;
+  @override
+  void initState() {
+    super.initState();
+    keyboardFocus.requestFocus();
+    _startEngine();
+  }
 
-  List<_ChatMessage> messages = [];
+  Future<void> _startEngine() async {
+    try {
+      await LLMEngine().start(
+        '/home/abancp/Projects/localGPT1.0/build/liblunarstudio.so',
+      );
+      if (mounted) setState(() => engineReady = true);
+    } catch (e) {
+      debugPrint('❌ Engine error: $e');
+    }
+  }
 
   @override
   void dispose() {
+    _scrollTimer?.cancel();
     controller.dispose();
+    scrollController.dispose();
     keyboardFocus.dispose();
     textFieldFocus.dispose();
-    scrollController.dispose();
     super.dispose();
   }
 
-  // Load model once in background
-  void _loadModelInBackground() async {
-    await Isolate.spawn(_modelLoadEntry, null);
-  }
-
-  static void _modelLoadEntry(dynamic _) {
-    LLMEngine().loadModel();
-  }
-
   void _scrollToBottom() {
-    Future.delayed(const Duration(milliseconds: 80), () {
-      if (scrollController.hasClients) {
-        scrollController.animateTo(
-          scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOut,
-        );
-      }
-    });
+    _tokensSinceScroll++;
+    
+    // Batch scroll updates (every 3 tokens or 50ms)
+    if (_tokensSinceScroll < 3) {
+      _scrollTimer?.cancel();
+      _scrollTimer = Timer(const Duration(milliseconds: 50), _performScroll);
+      return;
+    }
+    
+    _performScroll();
+  }
+
+  void _performScroll() {
+    _tokensSinceScroll = 0;
+    if (!mounted || !scrollController.hasClients) return;
+    
+    scrollController.jumpTo(scrollController.position.maxScrollExtent);
   }
 
   void _onSubmit() {
+    if (!engineReady || isGenerating) return;
+
     final text = controller.text.trim();
     if (text.isEmpty) return;
 
-    // First user message → load model now
-    if (!modelInitialized) {
-      modelInitialized = true;
-      _loadModelInBackground();
-    }
-
     setState(() {
-      messages.add(_ChatMessage(role: "user", content: text));
+      messages.add(_ChatMessage(role: 'user', content: text));
+      isGenerating = true;
     });
-
+    
     controller.clear();
-    _scrollToBottom();
-
-    _runModelIsolate(text);
+    _performScroll();
+    _runLLM(text);
   }
 
-  // Create isolate which runs LLMEngine.generate (blocking C++ call)
-  void _runModelIsolate(String prompt) async {
-    final receive = ReceivePort();
-    final exitPort = ReceivePort();
+  void _runLLM(String prompt) {
+    // Add placeholder for streaming
+    setState(() {
+      messages.add(const _ChatMessage(role: 'assistant', content: ''));
+    });
+    
+    final int index = messages.length - 1;
+    final buffer = StringBuffer();
 
-    final isolate = await Isolate.spawn<_IsolateArgs>(
-      _isolateEntry,
-      _IsolateArgs(prompt, receive.sendPort),
-      onExit: exitPort.sendPort,
-      errorsAreFatal: false,
-    );
-
-    bool firstToken = true;
-
-    final sub = receive.listen((dynamic token) {
-      if (token is String) {
-        setState(() {
-          if (firstToken) {
-            messages.add(_ChatMessage(role: "assistant", content: token));
-            firstToken = false;
-          } else {
-            final last = messages.last;
-            messages[messages.length - 1] =
-                _ChatMessage(role: last.role, content: last.content + token);
-          }
-        });
-        _scrollToBottom();
+    LLMEngine().generate(prompt, (String tok) {
+      if (!mounted) return;
+      
+      buffer.write(tok);
+      
+      // Update UI (Flutter will batch this automatically)
+      setState(() {
+        messages[index] = _ChatMessage(
+          role: 'assistant',
+          content: buffer.toString(),
+        );
+      });
+      
+      _scrollToBottom();
+    }).then((_) {
+      if (mounted) {
+        setState(() => isGenerating = false);
+        _performScroll();
       }
-    });
-
-    exitPort.listen((_) {
-      sub.cancel();
-      receive.close();
-      exitPort.close();
-      isolate.kill(priority: Isolate.immediate);
-    });
-  }
-
-  // Entry for LLM token streaming
-  static void _isolateEntry(_IsolateArgs args) {
-    final prompt = args.prompt;
-    final sendPort = args.sendPort;
-
-    // NO loadModel here → loaded earlier
-    LLMEngine().generate(prompt, (tok) {
-      sendPort.send(tok);
+    }).catchError((e) {
+      if (!mounted) return;
+      setState(() {
+        messages[index] = _ChatMessage(
+          role: 'assistant',
+          content: 'Error: $e',
+        );
+        isGenerating = false;
+      });
     });
   }
 
@@ -125,17 +134,17 @@ class _MainPanelState extends State<MainPanel> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final width = MediaQuery.of(context).size.width;
-
+    
     double hPad = 16;
     double tPad = 10;
     double bPad = 14;
-
-    if (width > 1200) {
-      hPad = 32;
-      bPad = 24;
-    } else if (width > 1600) {
+    
+    if (width > 1600) {
       hPad = 48;
       bPad = 32;
+    } else if (width > 1200) {
+      hPad = 32;
+      bPad = 24;
     }
 
     return Container(
@@ -149,17 +158,17 @@ class _MainPanelState extends State<MainPanel> {
               itemCount: messages.length,
               itemBuilder: (context, i) {
                 final msg = messages[i];
-                final isUser = msg.role == "user";
-
+                final isUser = msg.role == 'user';
+                
                 return Align(
-                  alignment:
-                      isUser ? Alignment.centerRight : Alignment.centerLeft,
+                  alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
                   child: Container(
                     margin: const EdgeInsets.symmetric(vertical: 6),
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color:
-                          isUser ? cs.primary.withOpacity(0.16) : cs.surface,
+                      color: isUser 
+                        ? cs.primary.withOpacity(0.16) 
+                        : cs.surfaceVariant,
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(color: cs.outline),
                     ),
@@ -172,25 +181,23 @@ class _MainPanelState extends State<MainPanel> {
               },
             ),
           ),
-
+          
           RawKeyboardListener(
             focusNode: keyboardFocus,
+            autofocus: true,
             onKey: (event) {
-              if (event.isKeyPressed(LogicalKeyboardKey.enter)) {
-                if (event.isShiftPressed) return;
-                if (event is RawKeyDownEvent) _onSubmit();
+              if (event is RawKeyDownEvent && 
+                  event.logicalKey == LogicalKeyboardKey.enter &&
+                  !event.isShiftPressed) {
+                _onSubmit();
               }
             },
             child: Container(
               padding: EdgeInsets.fromLTRB(hPad, tPad, hPad, bPad),
-              color: Colors.transparent,
               child: Column(
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
                       color: Colors.transparent,
                       borderRadius: BorderRadius.circular(14),
@@ -203,31 +210,35 @@ class _MainPanelState extends State<MainPanel> {
                           child: TextField(
                             focusNode: textFieldFocus,
                             controller: controller,
+                            enabled: !isGenerating,
                             minLines: 1,
                             maxLines: 8,
                             keyboardType: TextInputType.multiline,
                             style: TextStyle(color: cs.onSurface),
                             decoration: InputDecoration(
-                              hintText: "Send a message…",
+                              hintText: isGenerating 
+                                ? 'Generating...' 
+                                : 'Send a message…',
                               hintStyle: TextStyle(
                                 color: cs.onSurface.withOpacity(0.4),
                               ),
                               border: InputBorder.none,
                               isCollapsed: true,
-                              contentPadding: const EdgeInsets.symmetric(
-                                vertical: 8,
-                              ),
+                              contentPadding: const EdgeInsets.symmetric(vertical: 8),
                             ),
+                            onSubmitted: (_) => _onSubmit(),
                           ),
                         ),
                         const SizedBox(width: 8),
                         GestureDetector(
-                          onTap: _onSubmit,
+                          onTap: isGenerating ? null : _onSubmit,
                           child: Container(
                             height: 34,
                             width: 34,
                             decoration: BoxDecoration(
-                              color: cs.primary,
+                              color: isGenerating 
+                                ? cs.primary.withOpacity(0.5)
+                                : cs.primary,
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Icon(
@@ -240,13 +251,11 @@ class _MainPanelState extends State<MainPanel> {
                       ],
                     ),
                   ),
-
                   const SizedBox(height: 6),
-
                   Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
-                      "Responses from AI may be incorrect.",
+                      'Responses from AI may be incorrect.',
                       style: TextStyle(
                         color: cs.onSurface.withOpacity(0.4),
                         fontSize: 10,
@@ -266,11 +275,6 @@ class _MainPanelState extends State<MainPanel> {
 class _ChatMessage {
   final String role;
   final String content;
-  _ChatMessage({required this.role, required this.content});
-}
 
-class _IsolateArgs {
-  final String prompt;
-  final SendPort sendPort;
-  _IsolateArgs(this.prompt, this.sendPort);
+  const _ChatMessage({required this.role, required this.content});
 }
