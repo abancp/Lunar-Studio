@@ -5,17 +5,44 @@
 #include <string>
 #include <cstring>
 
-// ---------- GLOBALS ----------
 static llama_model *g_model = nullptr;
 static llama_sampler *g_sampler = nullptr;
 static const llama_vocab *g_vocab = nullptr;
 static llama_model_params g_model_params;
 static llama_context_params g_ctx_params;
 
-// FULL CHAT HISTORY
 static std::vector<llama_chat_message> g_messages;
 
-// ---------- MODEL LOAD ----------
+void remove_think_blocks(std::string &s)
+{
+    const std::string start_tag = "<think>";
+    const std::string end_tag = "</think>";
+
+    while (true)
+    {
+        // find start
+        size_t s_pos = s.find(start_tag);
+        if (s_pos == std::string::npos)
+            break; // no more <think>
+
+        // find end
+        size_t e_pos = s.find(end_tag, s_pos);
+        if (e_pos == std::string::npos)
+        {
+            // malformed: remove everything from <think> to end
+            s.erase(s_pos);
+            break;
+        }
+
+        // remove <think> ... </think>
+        s.erase(s_pos, (e_pos + end_tag.length()) - s_pos);
+    }
+
+    // optional: trim leading whitespace/newlines after removal
+    while (!s.empty() && (s[0] == '\n' || s[0] == ' '))
+        s.erase(s.begin());
+}
+
 int load_model(const char *model_path)
 {
     llama_log_set(
@@ -49,7 +76,6 @@ int load_model(const char *model_path)
     return 0;
 }
 
-// ---------- APPLY CHAT TEMPLATE ----------
 static std::string build_prompt_from_history()
 {
     const char *tmpl = llama_model_chat_template(g_model, nullptr);
@@ -57,7 +83,6 @@ static std::string build_prompt_from_history()
     if (!tmpl)
         throw std::runtime_error("Chat template missing");
 
-    // size expands as needed
     std::vector<char> out(4096);
 
     int n = llama_chat_apply_template(
@@ -83,7 +108,6 @@ static std::string build_prompt_from_history()
     return std::string(out.data(), n);
 }
 
-// ---------- RUN MODEL WITH MEMORY ----------
 std::string run_model(std::string prompt,
                       const char *,
                       bool,
@@ -92,10 +116,8 @@ std::string run_model(std::string prompt,
 {
     std::cout << "Model running......... " << "\n";
 
-    // 1. STORE USER MESSAGE
     g_messages.push_back({"user", strdup(prompt.c_str())});
 
-    // 2. BUILD FULL CHAT PROMPT (all messages)
     std::string final_prompt = build_prompt_from_history();
     std::cout << "Final : " << final_prompt << "\n";
 
@@ -126,13 +148,15 @@ std::string run_model(std::string prompt,
             break;
 
         llama_token tok = llama_sampler_sample(g_sampler, ctx, -1);
-        if (llama_vocab_is_eog(g_vocab, tok))
-            break;
 
         char buf[256];
         int n = llama_token_to_piece(g_vocab, tok, buf, sizeof(buf), 0, true);
         if (n < 0)
+        {
+
+            std::cout << "Exited due to invalid token" << std::endl;
             break;
+        }
 
         std::string piece(buf, n);
         response += piece;
@@ -140,12 +164,17 @@ std::string run_model(std::string prompt,
         if (cb)
             cb(piece); // stream to Python
 
+        if (llama_vocab_is_eog(g_vocab, tok))
+        {
+            std::cout << "EOG hit : " << tok << std::endl;
+            break;
+        }
+
         batch = llama_batch_get_one(&tok, 1);
     }
 
     llama_free(ctx);
-
-    // 4. ADD ASSISTANT MESSAGE TO HISTORY
+    remove_think_blocks(response);
     g_messages.push_back({"assistant", strdup(response.c_str())});
 
     return response;
