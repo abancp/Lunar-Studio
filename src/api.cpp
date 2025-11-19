@@ -3,7 +3,7 @@
 #include <string>
 #include <iostream>
 
-#include "run_llm.hpp"
+#include "model.hpp"
 #include "api.h"
 
 extern "C"

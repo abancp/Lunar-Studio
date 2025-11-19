@@ -4,7 +4,7 @@
 #include <string>
 #include <embed.hpp>
 #include <search.hpp>
-#include "run_llm.hpp"
+#include "model.hpp"
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <string>
