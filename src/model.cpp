@@ -161,15 +161,14 @@ std::string run_model(std::string prompt,
         std::string piece(buf, n);
         response += piece;
 
-        if (cb)
-            cb(piece); // stream to Python
-
         if (llama_vocab_is_eog(g_vocab, tok))
         {
             std::cout << "EOG hit : " << tok << std::endl;
             break;
         }
 
+        if (cb)
+            cb(piece); // stream to Python
         batch = llama_batch_get_one(&tok, 1);
     }
 
