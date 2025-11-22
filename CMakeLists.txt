@@ -50,22 +50,53 @@ qt_policy(SET QTP0001 NEW)
 # ============================================================
 # ⚙️ Backend Executables
 # ============================================================
+# ============================================================
+# LunarStudio CLI Executable
+# ============================================================
 
-# ---- LunarStudio (CLI)
 add_executable(LunarStudio
     src/main.cpp
     src/embed.cpp
     src/search.cpp
-    src/run_llm.cpp
+    src/model.cpp
     src/utils/extract_search_query.cpp
 )
 
-
-
-
 target_include_directories(LunarStudio PRIVATE include)
 target_include_directories(LunarStudio PRIVATE include/utils)
+
 target_link_libraries(LunarStudio PRIVATE
+    llama
+    faiss
+    ggml
+    ggml-base
+    ${SQLite3_LIBRARIES}
+    ${OpenMP_CXX_LIBRARIES}
+    ${BLAS_LIBRARIES}
+    ${LAPACK_LIBRARIES}
+)
+
+target_compile_options(LunarStudio PRIVATE -O3 -march=native ${OpenMP_CXX_FLAGS})
+
+install(TARGETS LunarStudio DESTINATION bin)
+
+
+# ============================================================
+# LunarStudio Shared Library (for Tauri)
+# ============================================================
+
+add_library(lunarstudio SHARED
+    src/api.cpp                 # your new FFI wrapper
+    src/embed.cpp
+    src/search.cpp
+    src/model.cpp
+    src/utils/extract_search_query.cpp
+)
+
+target_include_directories(lunarstudio PUBLIC include)
+target_include_directories(lunarstudio PRIVATE include/utils)
+
+target_link_libraries(lunarstudio PUBLIC
     llama
     faiss
     ${SQLite3_LIBRARIES}
@@ -73,10 +104,10 @@ target_link_libraries(LunarStudio PRIVATE
     ${BLAS_LIBRARIES}
     ${LAPACK_LIBRARIES}
 )
-target_compile_options(LunarStudio PRIVATE -O3 -march=native ${OpenMP_CXX_FLAGS})
 
-install(TARGETS LunarStudio DESTINATION bin)
+target_compile_options(lunarstudio PRIVATE -O3 -march=native ${OpenMP_CXX_FLAGS})
 
+install(TARGETS lunarstudio DESTINATION lib)
 
 # ---- make_index (CLI)
 add_executable(make_index
@@ -104,50 +135,50 @@ install(TARGETS make_index DESTINATION bin)
 # ============================================================
 
 
-qt_add_executable(LunarStudio_gui
-    src/gui_main.cpp
-    src/Engine.cpp
-    src/run_llm.cpp
-    src/search.cpp
-    src/embed.cpp
-    src/utils/extract_search_query.cpp
-    src/Engine.h
-)
+# qt_add_executable(LunarStudio_gui
+#     src/gui_main.cpp
+#     src/Engine.cpp
+#     src/run_llm.cpp
+#     src/search.cpp
+#     src/embed.cpp
+#     src/utils/extract_search_query.cpp
+#     src/Engine.h
+# )
 
-target_include_directories(LunarStudio_gui PRIVATE include)
-target_include_directories(LunarStudio_gui PRIVATE include/utils)
-
-
-# **IMPORTANT: use relative paths inside your source tree**
-qt_add_qml_module(LunarStudio_gui
-    URI LunarStudioUI
-    VERSION 1.0
-    RESOURCE_PREFIX "/"
-    QML_FILES
-        src/qml/Main.qml
-        src/qml/pages/LoadingPage.qml
-        src/qml/pages/ChatPage.qml
-)
+# target_include_directories(LunarStudio_gui PRIVATE include)
+# target_include_directories(LunarStudio_gui PRIVATE include/utils)
 
 
-target_link_libraries(LunarStudio_gui PRIVATE
-    Qt6::Quick
-    Qt6::Qml
-    Qt6::Gui
-    llama
-    faiss
-    ${SQLite3_LIBRARIES}
-    ${OpenMP_CXX_LIBRARIES}
-    ${BLAS_LIBRARIES}
-    ${LAPACK_LIBRARIES}
-)
+# # **IMPORTANT: use relative paths inside your source tree**
+# qt_add_qml_module(LunarStudio_gui
+#     URI LunarStudioUI
+#     VERSION 1.0
+#     RESOURCE_PREFIX "/"
+#     QML_FILES
+#         src/qml/Main.qml
+#         src/qml/pages/LoadingPage.qml
+#         src/qml/pages/ChatPage.qml
+# )
 
-target_compile_options(LunarStudio_gui PRIVATE -O3 -march=native ${OpenMP_CXX_FLAGS})
+
+# target_link_libraries(LunarStudio_gui PRIVATE
+#     Qt6::Quick
+#     Qt6::Qml
+#     Qt6::Gui
+#     llama
+#     faiss
+#     ${SQLite3_LIBRARIES}
+#     ${OpenMP_CXX_LIBRARIES}
+#     ${BLAS_LIBRARIES}
+#     ${LAPACK_LIBRARIES}
+# )
+
+# target_compile_options(LunarStudio_gui PRIVATE -O3 -march=native ${OpenMP_CXX_FLAGS})
 
 
 # ============================================================
 # ⚠️ Deprecation warnings from llama.cpp
 # ============================================================
-foreach(target LunarStudio make_index LunarStudio_gui)
+foreach(target LunarStudio make_index lunarstudio)
     target_compile_options(${target} PRIVATE -Wno-deprecated-declarations)
 endforeach()
