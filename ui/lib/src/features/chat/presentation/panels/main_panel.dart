@@ -7,7 +7,9 @@ import 'package:flutter/services.dart';
 import 'package:LunarStudio/src/ffi/llm_engine.dart';
 
 class MainPanel extends StatefulWidget {
-  const MainPanel({super.key});
+  final bool engineReady;
+
+  const MainPanel({super.key, required this.engineReady});
 
   @override
   State<MainPanel> createState() => _MainPanelState();
@@ -22,7 +24,7 @@ class _MainPanelState extends State<MainPanel> {
   // messages will contain ChatMessage instances that hold their own notifiers
   final List<_ChatMessage> messages = [];
 
-  bool engineReady = false;
+  bool get engineReady => widget.engineReady;
   bool isGenerating = false;
 
   // Batch updates for smoother rendering
@@ -32,19 +34,18 @@ class _MainPanelState extends State<MainPanel> {
   void initState() {
     super.initState();
     keyboardFocus.requestFocus();
-    _startEngine();
   }
 
-  Future<void> _startEngine() async {
-    try {
-      await LLMEngine().start(
-        '/home/abancp/Projects/localGPT1.0/build/liblunarstudio.so',
-      );
-      if (mounted) setState(() => engineReady = true);
-    } catch (e) {
-      debugPrint('❌ Engine error: $e');
-    }
-  }
+  // Future<void> _startEngine() async {
+  //   try {
+  //     await LLMEngine().start(
+  //       '/home/abancp/Projects/localGPT1.0/build/liblunarstudio.so',
+  //     );
+  //     if (mounted) setState(() => engineReady = true);
+  //   } catch (e) {
+  //     debugPrint('❌ Engine error: $e');
+  //   }
+  // }
 
   @override
   void dispose() {
@@ -125,26 +126,29 @@ class _MainPanelState extends State<MainPanel> {
     final int index = messages.length - 1;
     final buffer = StringBuffer();
 
-    LLMEngine().generate(prompt, (String tok) {
-      if (!mounted) return;
-      buffer.write(tok);
-      final parsed = _parseChunks(buffer.toString());
-      // Update only the assistant's notifier — avoids setState per token
-      assistantMsg.updateChunks(parsed);
-    }).then((_) {
-      if (!mounted) return;
-      // Stop generation state and finalize: if there are no chunks, keep empty string
-      setState(() {
-        isGenerating = false;
-      });
-      _performScroll();
-    }).catchError((e) {
-      if (!mounted) return;
-      assistantMsg.updateChunks([_Chunk('Error: $e', isThinking: false)]);
-      setState(() {
-        isGenerating = false;
-      });
-    });
+    LLMEngine()
+        .generate(prompt, (String tok) {
+          if (!mounted) return;
+          buffer.write(tok);
+          final parsed = _parseChunks(buffer.toString());
+          // Update only the assistant's notifier — avoids setState per token
+          assistantMsg.updateChunks(parsed);
+        })
+        .then((_) {
+          if (!mounted) return;
+          // Stop generation state and finalize: if there are no chunks, keep empty string
+          setState(() {
+            isGenerating = false;
+          });
+          _performScroll();
+        })
+        .catchError((e) {
+          if (!mounted) return;
+          assistantMsg.updateChunks([_Chunk('Error: $e', isThinking: false)]);
+          setState(() {
+            isGenerating = false;
+          });
+        });
   }
 
   @override
@@ -189,14 +193,20 @@ class _MainPanelState extends State<MainPanel> {
                 final maxWidth = min(width * 0.9, 900);
 
                 return Align(
-                  alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+                  alignment: isUser
+                      ? Alignment.centerRight
+                      : Alignment.centerLeft,
                   child: RepaintBoundary(
                     child: Container(
-                      constraints: BoxConstraints(maxWidth: maxWidth.toDouble()),
+                      constraints: BoxConstraints(
+                        maxWidth: maxWidth.toDouble(),
+                      ),
                       margin: const EdgeInsets.symmetric(vertical: 6),
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: isUser ? cs.primary.withOpacity(0.16) : cs.surfaceVariant,
+                        color: isUser
+                            ? cs.primary.withOpacity(0.16)
+                            : cs.surfaceVariant,
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(color: cs.outline),
                       ),
@@ -227,7 +237,10 @@ class _MainPanelState extends State<MainPanel> {
               child: Column(
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.transparent,
                       borderRadius: BorderRadius.circular(14),
@@ -246,11 +259,17 @@ class _MainPanelState extends State<MainPanel> {
                             keyboardType: TextInputType.multiline,
                             style: plainStyle,
                             decoration: InputDecoration(
-                              hintText: isGenerating ? 'Generating...' : 'Send a message…',
-                              hintStyle: TextStyle(color: cs.onSurface.withOpacity(0.4)),
+                              hintText: isGenerating
+                                  ? 'Generating...'
+                                  : 'Send a message…',
+                              hintStyle: TextStyle(
+                                color: cs.onSurface.withOpacity(0.4),
+                              ),
                               border: InputBorder.none,
                               isCollapsed: true,
-                              contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                              contentPadding: const EdgeInsets.symmetric(
+                                vertical: 8,
+                              ),
                             ),
                             onSubmitted: (_) => _onSubmit(),
                           ),
@@ -262,10 +281,16 @@ class _MainPanelState extends State<MainPanel> {
                             height: 34,
                             width: 34,
                             decoration: BoxDecoration(
-                              color: isGenerating ? cs.primary.withOpacity(0.5) : cs.primary,
+                              color: isGenerating
+                                  ? cs.primary.withOpacity(0.5)
+                                  : cs.primary,
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: Icon(Icons.arrow_upward_rounded, size: 20, color: cs.onPrimary),
+                            child: Icon(
+                              Icons.arrow_upward_rounded,
+                              size: 20,
+                              color: cs.onPrimary,
+                            ),
                           ),
                         ),
                       ],
@@ -276,7 +301,10 @@ class _MainPanelState extends State<MainPanel> {
                     alignment: Alignment.centerLeft,
                     child: Text(
                       'Responses from AI may be incorrect.',
-                      style: TextStyle(color: cs.onSurface.withOpacity(0.4), fontSize: 10),
+                      style: TextStyle(
+                        color: cs.onSurface.withOpacity(0.4),
+                        fontSize: 10,
+                      ),
                     ),
                   ),
                 ],
@@ -322,10 +350,8 @@ class MessageBubble extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(child: Text(c.text, style: thinkingStyle)),
-                    if (isLastThinking)
-                      const SizedBox(width: 8),
-                    if (isLastThinking)
-                      ThinkingDots(),
+                    if (isLastThinking) const SizedBox(width: 8),
+                    if (isLastThinking) ThinkingDots(),
                   ],
                 ),
               ),
@@ -342,7 +368,11 @@ class MessageBubble extends StatelessWidget {
 
         if (children.isEmpty) return const SizedBox.shrink();
 
-        return Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: children);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: children,
+        );
       },
     );
   }
@@ -356,14 +386,18 @@ class ThinkingDots extends StatefulWidget {
   State<ThinkingDots> createState() => _ThinkingDotsState();
 }
 
-class _ThinkingDotsState extends State<ThinkingDots> with SingleTickerProviderStateMixin {
+class _ThinkingDotsState extends State<ThinkingDots>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
 
   @override
   void initState() {
     super.initState();
     // short loop, lightweight
-    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 900));
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
     _controller.repeat();
   }
 
@@ -377,7 +411,11 @@ class _ThinkingDotsState extends State<ThinkingDots> with SingleTickerProviderSt
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final TextStyle dotStyle = TextStyle(color: cs.onSurface.withOpacity(0.55), fontStyle: FontStyle.italic, fontSize: 14);
+    final TextStyle dotStyle = TextStyle(
+      color: cs.onSurface.withOpacity(0.55),
+      fontStyle: FontStyle.italic,
+      fontSize: 14,
+    );
 
     return SizedBox(
       width: 36,
@@ -386,7 +424,12 @@ class _ThinkingDotsState extends State<ThinkingDots> with SingleTickerProviderSt
         builder: (context, _) {
           final step = (_controller.value * 3).floor();
           final dots = '.' * (step + 1);
-          return Text(dots, style: dotStyle, maxLines: 1, overflow: TextOverflow.clip);
+          return Text(
+            dots,
+            style: dotStyle,
+            maxLines: 1,
+            overflow: TextOverflow.clip,
+          );
         },
       ),
     );
@@ -406,13 +449,17 @@ class _ChatMessage {
   final String role;
   final ValueNotifier<List<_Chunk>> chunksNotifier;
 
-  _ChatMessage._(this.role, List<_Chunk> initial) : chunksNotifier = ValueNotifier<List<_Chunk>>(initial);
+  _ChatMessage._(this.role, List<_Chunk> initial)
+    : chunksNotifier = ValueNotifier<List<_Chunk>>(initial);
 
   factory _ChatMessage({required String role, required List<_Chunk> chunks}) {
     return _ChatMessage._(role, chunks);
   }
 
-  factory _ChatMessage.fromPlain({required String role, required String plain}) {
+  factory _ChatMessage.fromPlain({
+    required String role,
+    required String plain,
+  }) {
     final parsed = _parsePlain(plain);
     return _ChatMessage._(role, parsed);
   }

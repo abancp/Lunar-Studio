@@ -9,9 +9,9 @@
 extern "C"
 {
     // Adjust this if needed
-    const char *model_path = "/home/abancp/Projects/localGPT1.0/models/Qwen3-0.6B-Q4_K_M.gguf";
+    // const char *model_path = "/home/abancp/Projects/localGPT1.0/models/Qwen3-0.6B-Q4_K_M.gguf";
 
-    void load_llm()
+    void load_llm(const char* model_path)
     {
         load_model(model_path);
     }
@@ -39,7 +39,7 @@ extern "C"
         std::cout << "[C++] Calling run_model..." << std::endl;
 
         // -------- Call your LLM engine --------
-        run_model(prompt_cpp, model_path, true, {}, cpp_cb);
+        run_model(prompt_cpp, true, {}, cpp_cb);
 
         std::cout << "[C++] Generation complete" << std::endl;
     }

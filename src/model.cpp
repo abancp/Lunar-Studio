@@ -109,7 +109,6 @@ static std::string build_prompt_from_history()
 }
 
 std::string run_model(std::string prompt,
-                      const char *,
                       bool,
                       std::vector<std::string>,
                       TokenCallback cb)

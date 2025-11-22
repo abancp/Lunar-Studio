@@ -3,20 +3,17 @@
 import 'dart:ffi';
 import 'dart:isolate';
 import 'package:ffi/ffi.dart';
+import 'package:flutter/rendering.dart';
 
-typedef NativeLoadLLM = Void Function();
-typedef NativeGenerateFn = Void Function(
-  Pointer<Utf8>,
-  Pointer<NativeFunction<NativeTokenCallback>>,
-);
+typedef NativeLoadLLM = Void Function(Pointer<Utf8>);
+typedef NativeGenerateFn =
+    Void Function(Pointer<Utf8>, Pointer<NativeFunction<NativeTokenCallback>>);
 typedef NativeTokenCallback = Void Function(Pointer<Utf8>);
 
 late DynamicLibrary _lib;
-late void Function() _load;
-late void Function(
-  Pointer<Utf8>,
-  Pointer<NativeFunction<NativeTokenCallback>>,
-) _gen;
+late void Function(Pointer<Utf8>) _load;
+late void Function(Pointer<Utf8>, Pointer<NativeFunction<NativeTokenCallback>>)
+_gen;
 
 SendPort? _currentReplyPort;
 int _currentId = -1;
@@ -26,11 +23,7 @@ late Pointer<NativeFunction<NativeTokenCallback>> _callbackPtr;
 
 void _tokenTrampoline(Pointer<Utf8> ptr) {
   final tok = ptr.toDartString();
-  _currentReplyPort?.send({
-    'cmd': 'token',
-    'id': _currentId,
-    'token': tok,
-  });
+  _currentReplyPort?.send({'cmd': 'token', 'id': _currentId, 'token': tok});
 }
 
 void llmWorkerEntry(SendPort engineSendPort) async {
@@ -46,12 +39,26 @@ void llmWorkerEntry(SendPort engineSendPort) async {
     if (cmd == 'init') {
       final libPath = msg['path'] as String;
       final replyPort = msg['reply'] as SendPort;
-
       try {
         _lib = DynamicLibrary.open(libPath);
-        _load = _lib.lookup<NativeFunction<NativeLoadLLM>>("load_llm").asFunction();
-        _gen = _lib.lookup<NativeFunction<NativeGenerateFn>>("generate").asFunction();
-        _load();
+        replyPort.send({'cmd': 'ready'});
+      } catch (e, st) {
+        replyPort.send({'cmd': 'error', 'error': '$e\n$st'});
+      }
+    }
+
+    if (cmd == 'load') {
+      final modelpath = msg['path'] as String;
+      final replyPort = msg['reply'] as SendPort;
+
+      try {
+        _load = _lib
+            .lookup<NativeFunction<NativeLoadLLM>>("load_llm")
+            .asFunction();
+        _gen = _lib
+            .lookup<NativeFunction<NativeGenerateFn>>("generate")
+            .asFunction();
+        _load(modelpath.toNativeUtf8());
         replyPort.send({'cmd': 'ready'});
       } catch (e, st) {
         replyPort.send({'cmd': 'error', 'error': '$e\n$st'});
@@ -66,7 +73,7 @@ void llmWorkerEntry(SendPort engineSendPort) async {
       final p = prompt.toNativeUtf8();
 
       try {
-        _gen(p, _callbackPtr);  // Reuse pre-allocated callback
+        _gen(p, _callbackPtr); // Reuse pre-allocated callback
       } catch (e) {
         // Silent error handling, send error token if needed
       }

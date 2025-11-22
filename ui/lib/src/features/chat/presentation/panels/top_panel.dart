@@ -5,11 +5,13 @@ import 'package:LunarStudio/src/features/chat/presentation/widgets/model_select_
 class TopPanel extends StatefulWidget {
   final String selectedModel;
   final ValueChanged<String> onModelChange;
+  final Future<void> Function() onLoadModel;
 
   const TopPanel({
     super.key,
     required this.selectedModel,
     required this.onModelChange,
+    required this.onLoadModel,
   });
 
   @override
@@ -59,7 +61,8 @@ class _TopPanelState extends State<TopPanel> {
 
                   const SizedBox(width: 8),
 
-                  Container(
+                 GestureDetector(
+                  child:  Container(
                     height: 26,
                     padding: const EdgeInsets.symmetric(horizontal: 8),
                     decoration: BoxDecoration(
@@ -79,7 +82,12 @@ class _TopPanelState extends State<TopPanel> {
                         ),
                       ],
                     ),
+                    
                   ),
+                  onTap:(){ 
+                    widget.onLoadModel();
+                  },
+                 )
                 ],
               ),
             ),

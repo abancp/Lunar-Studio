@@ -7,8 +7,6 @@ import 'src/app.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Must come before ANY database open
   sqfliteFfiInit();
   databaseFactory = databaseFactoryFfi;
 
