@@ -9,7 +9,7 @@
 extern "C"
 {
     // Adjust this if needed
-    const char *model_path = "/home/abancp/Projects/localGPT1.0/models/Qwen3-0.6B-Q8_0.gguf";
+    const char *model_path = "/home/abancp/Projects/localGPT1.0/models/Qwen3-0.6B-Q4_K_M.gguf";
 
     void load_llm()
     {
@@ -27,7 +27,6 @@ extern "C"
         {
             cpp_cb = [cb](const std::string &tok)
             {
-                // Make a stable copy of the token
                 char *copy = strdup(tok.c_str()); // safe heap buffer
                 cb(copy);                         // call Python/Flutter
                 free(copy);                       // release after callback

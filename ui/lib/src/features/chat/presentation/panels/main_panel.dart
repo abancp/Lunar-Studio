@@ -60,10 +60,6 @@ class _MainPanelState extends State<MainPanel> {
     super.dispose();
   }
 
-  void _scrollToBottom() {
-    _performScroll();
-  }
-
   void _performScroll() {
     if (!mounted || !scrollController.hasClients) return;
 
