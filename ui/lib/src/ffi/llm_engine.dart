@@ -15,7 +15,7 @@ class LLMEngine {
   bool _ready = false;
 
   Future<void> init(String libpath) async {
-    try {
+    try{
       debugPrint("[Engine] : C++ Lib initing..");
       final rp = ReceivePort();
       await Isolate.spawn(llmWorkerEntry, rp.sendPort, debugName: "LLMWorker");
@@ -42,7 +42,7 @@ class LLMEngine {
           throw Exception(msg["error"]);
         }
       }
-    } catch (e) {
+    }catch(e){
       debugPrint("Error while initing : $e");
     }
   }
@@ -81,7 +81,7 @@ class LLMEngine {
       isModelLoaded = true;
     } catch (e) {
       debugPrint("Error while loading model : $e");
-    } finally {
+    } finally{
       modelLoading = false;
     }
   }
@@ -90,10 +90,8 @@ class LLMEngine {
     String prompt,
     void Function(String tok) onToken,
   ) async {
-    debugPrint(
-      "Engine Ready : $_ready \n isModelLoaded $isModelLoaded \n Model Loading : $modelLoading",
-    );
     if (!_ready || !isModelLoaded || modelLoading) {
+      debugPrint("Engine Ready : $_ready \n isModelLoaded $isModelLoaded \n Model Loading : $modelLoading");
       throw StateError("Engine not ready");
     }
     // print("[Engine] generate() → $prompt");

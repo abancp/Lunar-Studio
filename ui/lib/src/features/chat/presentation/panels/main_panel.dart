@@ -1,5 +1,4 @@
 // lib/src/features/chat/presentation/panels/main_panel.dart
-
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
@@ -13,7 +12,6 @@ enum ChunkType { plain, thinking, code, heading, bullet }
 class _TextSpan {
   final String text;
   final bool isBold;
-
   const _TextSpan(this.text, this.isBold);
 }
 
@@ -21,7 +19,6 @@ class _Chunk {
   final List<_TextSpan> spans;
   final ChunkType type;
   final String? language;
-
   const _Chunk(this.spans, this.type, {this.language});
 }
 
@@ -29,7 +26,6 @@ class _Chunk {
 List<_TextSpan> _parseBoldText(String text) {
   final List<_TextSpan> spans = [];
   int idx = 0;
-
   while (idx < text.length) {
     final boldStart = text.indexOf('**', idx);
     if (boldStart == -1) {
@@ -38,32 +34,37 @@ List<_TextSpan> _parseBoldText(String text) {
       }
       break;
     }
-
     if (boldStart > idx) {
       spans.add(_TextSpan(text.substring(idx, boldStart), false));
     }
-
     final boldEnd = text.indexOf('**', boldStart + 2);
     if (boldEnd == -1) {
       spans.add(_TextSpan(text.substring(boldStart), false));
       break;
     }
-
     final boldText = text.substring(boldStart + 2, boldEnd);
     if (boldText.isNotEmpty) {
       spans.add(_TextSpan(boldText, true));
     }
     idx = boldEnd + 2;
   }
-
   return spans;
+}
+
+/// Check if text contains closed thinking tags
+bool _hasClosedThinkTag(String text) {
+  return text.contains('</think>');
+}
+
+/// Check if text has open thinking tag
+bool _hasOpenThinkTag(String text) {
+  return text.contains('<think>');
 }
 
 /// Parse full text including <think>...</think> and visible content.
 List<_Chunk> parseTextToChunks(String text) {
   final List<_Chunk> chunks = [];
   int idx = 0;
-
   while (idx < text.length) {
     final startTag = text.indexOf('<think>', idx);
     if (startTag == -1) {
@@ -73,14 +74,12 @@ List<_Chunk> parseTextToChunks(String text) {
       }
       break;
     }
-
     if (startTag > idx) {
       final plain = text.substring(idx, startTag);
       if (plain.isNotEmpty) {
         chunks.addAll(_parseVisibleSegment(plain));
       }
     }
-
     final endTag = text.indexOf('</think>', startTag + 7);
     if (endTag == -1) {
       final inner = text.substring(startTag + 7);
@@ -96,7 +95,6 @@ List<_Chunk> parseTextToChunks(String text) {
       idx = endTag + 8;
     }
   }
-
   return chunks;
 }
 
@@ -104,51 +102,48 @@ List<_Chunk> parseTextToChunks(String text) {
 List<_Chunk> _parseVisibleSegment(String text) {
   final List<_Chunk> chunks = [];
   int idx = 0;
-
   while (idx < text.length) {
     final fenceStart = text.indexOf('```', idx);
     if (fenceStart == -1) {
       _splitPlainIntoLines(text.substring(idx), chunks);
       break;
     }
-
     if (fenceStart > idx) {
       _splitPlainIntoLines(text.substring(idx, fenceStart), chunks);
     }
-
     final langLineEnd = text.indexOf('\n', fenceStart + 3);
     if (langLineEnd == -1) {
       _splitPlainIntoLines(text.substring(fenceStart), chunks);
       break;
     }
-
-    // Extract language
     final language = text.substring(fenceStart + 3, langLineEnd).trim();
-
     final fenceEnd = text.indexOf('```', langLineEnd + 1);
     if (fenceEnd == -1) {
       final code = text.substring(langLineEnd + 1);
       if (code.trim().isNotEmpty) {
-        chunks.add(_Chunk(
-          [_TextSpan(code.trimRight(), false)],
-          ChunkType.code,
-          language: language.isEmpty ? null : language,
-        ));
+        chunks.add(
+          _Chunk(
+            [_TextSpan(code.trimRight(), false)],
+            ChunkType.code,
+            language: language.isEmpty ? null : language,
+          ),
+        );
       }
       break;
     } else {
       final code = text.substring(langLineEnd + 1, fenceEnd);
       if (code.trim().isNotEmpty) {
-        chunks.add(_Chunk(
-          [_TextSpan(code.trimRight(), false)],
-          ChunkType.code,
-          language: language.isEmpty ? null : language,
-        ));
+        chunks.add(
+          _Chunk(
+            [_TextSpan(code.trimRight(), false)],
+            ChunkType.code,
+            language: language.isEmpty ? null : language,
+          ),
+        );
       }
       idx = fenceEnd + 3;
     }
   }
-
   return chunks;
 }
 
@@ -159,13 +154,18 @@ void _splitPlainIntoLines(String text, List<_Chunk> chunks) {
     final line = rawLine.trimRight();
     if (line.isEmpty) continue;
     final trimmedLeft = rawLine.trimLeft();
-
     if (line.startsWith('### ')) {
-      chunks.add(_Chunk(_parseBoldText(line.substring(4).trimLeft()), ChunkType.heading));
+      chunks.add(
+        _Chunk(_parseBoldText(line.substring(4).trimLeft()), ChunkType.heading),
+      );
     } else if (line.startsWith('## ')) {
-      chunks.add(_Chunk(_parseBoldText(line.substring(3).trimLeft()), ChunkType.heading));
+      chunks.add(
+        _Chunk(_parseBoldText(line.substring(3).trimLeft()), ChunkType.heading),
+      );
     } else if (line.startsWith('# ')) {
-      chunks.add(_Chunk(_parseBoldText(line.substring(2).trimLeft()), ChunkType.heading));
+      chunks.add(
+        _Chunk(_parseBoldText(line.substring(2).trimLeft()), ChunkType.heading),
+      );
     } else if (trimmedLeft.startsWith('- ') || trimmedLeft.startsWith('* ')) {
       final bulletText = trimmedLeft.substring(2).trimLeft();
       if (bulletText.isNotEmpty) {
@@ -179,7 +179,6 @@ void _splitPlainIntoLines(String text, List<_Chunk> chunks) {
 
 class MainPanel extends StatefulWidget {
   final bool engineReady;
-
   const MainPanel({super.key, required this.engineReady});
 
   @override
@@ -191,9 +190,7 @@ class _MainPanelState extends State<MainPanel> {
   final ScrollController scrollController = ScrollController();
   final FocusNode keyboardFocus = FocusNode();
   final FocusNode textFieldFocus = FocusNode();
-
   final List<_ChatMessage> messages = [];
-
   bool get engineReady => widget.engineReady;
   bool isGenerating = false;
 
@@ -217,7 +214,6 @@ class _MainPanelState extends State<MainPanel> {
 
   void _performScroll() {
     if (!mounted || !scrollController.hasClients) return;
-
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && scrollController.hasClients) {
         scrollController.animateTo(
@@ -231,15 +227,12 @@ class _MainPanelState extends State<MainPanel> {
 
   void _onSubmit() {
     if (!engineReady || isGenerating) return;
-
     final text = controller.text.trim();
     if (text.isEmpty) return;
-
     setState(() {
       messages.add(_ChatMessage.fromPlain(role: 'user', plain: text));
       isGenerating = true;
     });
-
     controller.clear();
     _performScroll();
     _runLLM(text);
@@ -252,13 +245,14 @@ class _MainPanelState extends State<MainPanel> {
     });
 
     final buffer = StringBuffer();
-
     LLMEngine()
         .generate(prompt, (String tok) {
           if (!mounted) return;
           buffer.write(tok);
-          final parsed = parseTextToChunks(buffer.toString());
-          assistantMsg.updateChunks(parsed);
+          final fullText = buffer.toString();
+
+          // Update the message with the full text
+          assistantMsg.updateFromText(fullText);
           _performScroll();
         })
         .then((_) {
@@ -270,9 +264,7 @@ class _MainPanelState extends State<MainPanel> {
         })
         .catchError((e) {
           if (!mounted) return;
-          assistantMsg.updateChunks(
-            [_Chunk([const _TextSpan('Error while generating response.', false)], ChunkType.plain)],
-          );
+          assistantMsg.updateFromText('Error while generating response.');
           setState(() {
             isGenerating = false;
           });
@@ -283,11 +275,9 @@ class _MainPanelState extends State<MainPanel> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final width = MediaQuery.of(context).size.width;
-
     double hPad = 16;
     double tPad = 10;
     double bPad = 14;
-
     if (width > 1600) {
       hPad = 48;
       bPad = 32;
@@ -302,6 +292,7 @@ class _MainPanelState extends State<MainPanel> {
       height: 1.5,
       letterSpacing: 0.2,
     );
+
     final TextStyle thinkingStyle = TextStyle(
       color: cs.onSurface.withOpacity(0.55),
       fontStyle: FontStyle.italic,
@@ -312,10 +303,7 @@ class _MainPanelState extends State<MainPanel> {
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [
-            cs.surfaceVariant.withOpacity(0.35),
-            cs.background,
-          ],
+          colors: [cs.surfaceVariant.withOpacity(0.35), cs.background],
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
         ),
@@ -325,14 +313,12 @@ class _MainPanelState extends State<MainPanel> {
           Expanded(
             child: ListView.builder(
               controller: scrollController,
-              padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+              padding: const EdgeInsets.fromLTRB(200, 20, 200, 16),
               itemCount: messages.length,
               itemBuilder: (context, i) {
                 final msg = messages[i];
                 final bool isUser = msg.role == 'user';
-
                 final maxWidth = min(width * 0.9, 900);
-
                 return Align(
                   alignment: isUser
                       ? Alignment.centerRight
@@ -345,22 +331,24 @@ class _MainPanelState extends State<MainPanel> {
                       margin: const EdgeInsets.symmetric(vertical: 6),
                       padding: EdgeInsets.zero,
                       child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: isUser
-                              ? cs.primary.withOpacity(0.12)
-                              : cs.surface.withOpacity(0.9),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: cs.outline.withOpacity(0.6),
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.06),
-                              blurRadius: 14,
-                              offset: const Offset(0, 6),
-                            ),
-                          ],
-                        ),
+                        decoration: isUser
+                            ? BoxDecoration(
+                                color: isUser
+                                    ? cs.primary.withOpacity(0.12)
+                                    : null,
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: cs.outline.withOpacity(0.6),
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.06),
+                                    blurRadius: 14,
+                                    offset: const Offset(0, 6),
+                                  ),
+                                ],
+                              )
+                            : BoxDecoration(),
                         child: Padding(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 14,
@@ -379,7 +367,6 @@ class _MainPanelState extends State<MainPanel> {
               },
             ),
           ),
-
           RawKeyboardListener(
             focusNode: keyboardFocus,
             autofocus: true,
@@ -498,7 +485,7 @@ class _MainPanelState extends State<MainPanel> {
   }
 }
 
-class MessageBubble extends StatelessWidget {
+class MessageBubble extends StatefulWidget {
   final _ChatMessage msg;
   final TextStyle plainStyle;
   final TextStyle thinkingStyle;
@@ -509,6 +496,13 @@ class MessageBubble extends StatelessWidget {
     required this.thinkingStyle,
     super.key,
   });
+
+  @override
+  State<MessageBubble> createState() => _MessageBubbleState();
+}
+
+class _MessageBubbleState extends State<MessageBubble> {
+  bool _showThinking = false;
 
   Widget _buildRichText(List<_TextSpan> spans, TextStyle baseStyle) {
     return RichText(
@@ -528,37 +522,23 @@ class MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<int>(
-      stream: msg.updateStream,
+      stream: widget.msg.updateStream,
       initialData: 0,
       builder: (context, snapshot) {
-        final chunks = msg.chunks;
+        final chunks = widget.msg.chunks;
         if (chunks.isEmpty) return const SizedBox.shrink();
 
-        final List<Widget> children = <Widget>[];
+        final List<Widget> children = [];
+        bool hasThinking = false;
+        final List<_Chunk> thinkingChunks = [];
 
         for (int i = 0; i < chunks.length; i++) {
           final c = chunks[i];
-          final bool isLast = i == chunks.length - 1;
-
           switch (c.type) {
             case ChunkType.thinking:
-              children.add(
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: _buildRichText(c.spans, thinkingStyle),
-                      ),
-                      if (isLast) const SizedBox(width: 8),
-                      if (isLast) const StreamingCursor(),
-                    ],
-                  ),
-                ),
-              );
+              hasThinking = true;
+              thinkingChunks.add(c);
               break;
-
             case ChunkType.code:
               children.add(
                 Padding(
@@ -570,14 +550,13 @@ class MessageBubble extends StatelessWidget {
                 ),
               );
               break;
-
             case ChunkType.heading:
               children.add(
                 Padding(
                   padding: const EdgeInsets.only(bottom: 6, top: 4),
                   child: _buildRichText(
                     c.spans,
-                    plainStyle.copyWith(
+                    widget.plainStyle.copyWith(
                       fontWeight: FontWeight.w700,
                       fontSize: 16.5,
                     ),
@@ -585,7 +564,6 @@ class MessageBubble extends StatelessWidget {
                 ),
               );
               break;
-
             case ChunkType.bullet:
               children.add(
                 Padding(
@@ -599,45 +577,319 @@ class MessageBubble extends StatelessWidget {
                           width: 5,
                           height: 5,
                           decoration: BoxDecoration(
-                            color: plainStyle.color?.withOpacity(0.7),
+                            color: widget.plainStyle.color?.withOpacity(0.7),
                             shape: BoxShape.circle,
                           ),
                         ),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
-                        child: _buildRichText(c.spans, plainStyle),
+                        child: _buildRichText(c.spans, widget.plainStyle),
                       ),
                     ],
                   ),
                 ),
               );
               break;
-
             case ChunkType.plain:
               children.add(
                 Padding(
                   padding: const EdgeInsets.only(bottom: 4),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: _buildRichText(c.spans, plainStyle),
-                      ),
-                      if (isLast) const SizedBox(width: 4),
-                      if (isLast) const StreamingCursor(),
-                    ],
-                  ),
+                  child: _buildRichText(c.spans, widget.plainStyle),
                 ),
               );
               break;
           }
         }
 
+        // Add thinking section at the top if exists
+        if (hasThinking) {
+          children.insert(
+            0,
+            ThinkingSection(
+              key: ValueKey('thinking_${widget.msg.hashCode}'),
+              chunks: thinkingChunks,
+              thinkingStyle: widget.thinkingStyle,
+              isExpanded: _showThinking,
+              isThinkingActive: widget.msg.isThinkingActive,
+              thinkingDuration: widget.msg.thinkingDuration,
+              onToggle: () {
+                setState(() {
+                  _showThinking = !_showThinking;
+                });
+              },
+            ),
+          );
+        }
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: children,
+        );
+      },
+    );
+  }
+}
+
+class ThinkingSection extends StatefulWidget {
+  final List<_Chunk> chunks;
+  final TextStyle thinkingStyle;
+  final bool isExpanded;
+  final bool isThinkingActive;
+  final double thinkingDuration;
+  final VoidCallback onToggle;
+
+  const ThinkingSection({
+    required this.chunks,
+    required this.thinkingStyle,
+    required this.isExpanded,
+    required this.isThinkingActive,
+    required this.thinkingDuration,
+    required this.onToggle,
+    super.key,
+  });
+
+  @override
+  State<ThinkingSection> createState() => _ThinkingSectionState();
+}
+
+class _ThinkingSectionState extends State<ThinkingSection>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _iconController;
+
+  @override
+  void initState() {
+    super.initState();
+    _iconController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 200),
+    );
+  }
+
+  @override
+  void didUpdateWidget(ThinkingSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isExpanded) {
+      _iconController.forward();
+    } else {
+      _iconController.reverse();
+    }
+  }
+
+  @override
+  void dispose() {
+    _iconController.dispose();
+    super.dispose();
+  }
+
+  Widget _buildRichText(List<_TextSpan> spans, TextStyle baseStyle) {
+    return RichText(
+      text: TextSpan(
+        children: spans.map((span) {
+          return TextSpan(
+            text: span.text,
+            style: span.isBold
+                ? baseStyle.copyWith(fontWeight: FontWeight.w700)
+                : baseStyle,
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: widget.onToggle,
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _AnimatedThinkingLabel(
+                    colorScheme: cs,
+                    isThinkingActive: widget.isThinkingActive,
+                    thinkingDuration: widget.thinkingDuration,
+                  ),
+                  const SizedBox(width: 4),
+                  AnimatedBuilder(
+                    animation: _iconController,
+                    builder: (context, child) {
+                      return Transform.rotate(
+                        angle: _iconController.value * 3.14159,
+                        child: Icon(
+                          Icons.keyboard_arrow_down_rounded,
+                          size: 18,
+                          color: cs.primary.withOpacity(0.8),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        AnimatedSize(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
+          child: widget.isExpanded
+              ? Container(
+                  margin: const EdgeInsets.only(top: 4, bottom: 8),
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: cs.surfaceVariant.withOpacity(0.3),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: cs.outline.withOpacity(0.2)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: widget.chunks.map((chunk) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: _buildRichText(
+                          chunk.spans,
+                          widget.thinkingStyle,
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                )
+              : const SizedBox.shrink(),
+        ),
+      ],
+    );
+  }
+}
+
+class _AnimatedThinkingLabel extends StatefulWidget {
+  final ColorScheme colorScheme;
+  final bool isThinkingActive;
+  final double thinkingDuration;
+
+  const _AnimatedThinkingLabel({
+    required this.colorScheme,
+    required this.isThinkingActive,
+    required this.thinkingDuration,
+  });
+
+  @override
+  State<_AnimatedThinkingLabel> createState() => _AnimatedThinkingLabelState();
+}
+
+class _AnimatedThinkingLabelState extends State<_AnimatedThinkingLabel>
+    with SingleTickerProviderStateMixin {
+  AnimationController? _controller;
+  Animation<double>? _animation;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeController();
+  }
+
+  void _initializeController() {
+    _controller?.dispose();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    );
+    _animation = Tween<double>(
+      begin: -1.0,
+      end: 2.0,
+    ).animate(CurvedAnimation(parent: _controller!, curve: Curves.linear));
+
+    if (widget.isThinkingActive) {
+      _controller!.repeat();
+    }
+  }
+
+  @override
+  void didUpdateWidget(_AnimatedThinkingLabel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    // When thinking status changes
+    if (oldWidget.isThinkingActive != widget.isThinkingActive) {
+      if (widget.isThinkingActive) {
+        // Start animation
+        if (_controller != null) {
+          _controller!.repeat();
+        }
+      } else {
+        // Stop animation
+        if (_controller != null) {
+          _controller!.stop();
+          _controller!.reset();
+        }
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Determine the text to display
+    String displayText;
+    if (widget.isThinkingActive) {
+      displayText = 'Thinking';
+    } else if (widget.thinkingDuration > 0) {
+      displayText =
+          'Thought for ${widget.thinkingDuration.toStringAsFixed(1)} seconds';
+    } else {
+      displayText = 'Thinking';
+    }
+
+    // If thinking is not active, show static text
+    if (!widget.isThinkingActive || _controller == null || _animation == null) {
+      return Text(
+        displayText,
+        style: TextStyle(
+          color: widget.colorScheme.primary.withOpacity(0.7),
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+        ),
+      );
+    }
+
+    // If thinking is active, show animated text
+    return AnimatedBuilder(
+      animation: _animation!,
+      builder: (context, child) {
+        return ShaderMask(
+          shaderCallback: (bounds) {
+            return LinearGradient(
+              begin: Alignment(_animation!.value, 0.0),
+              end: Alignment(_animation!.value - 0.5, 0.0),
+              colors: [
+                widget.colorScheme.primary.withOpacity(0.3),
+                widget.colorScheme.primary.withOpacity(0.9),
+                widget.colorScheme.primary.withOpacity(0.3),
+              ],
+              stops: const [0.0, 0.5, 1.0],
+            ).createShader(bounds);
+          },
+          child: Text(
+            displayText,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         );
       },
     );
@@ -666,7 +918,6 @@ class _CodeBlockWidgetState extends State<CodeBlockWidget> {
     setState(() {
       _copied = true;
     });
-
     Future.delayed(const Duration(seconds: 2), () {
       if (mounted) {
         setState(() {
@@ -707,14 +958,10 @@ class _CodeBlockWidgetState extends State<CodeBlockWidget> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.1),
-          width: 1,
-        ),
+        border: Border.all(color: Colors.white.withOpacity(0.1), width: 1),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(
@@ -775,7 +1022,9 @@ class _CodeBlockWidgetState extends State<CodeBlockWidget> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
-                            _copied ? Icons.check_rounded : Icons.content_copy_rounded,
+                            _copied
+                                ? Icons.check_rounded
+                                : Icons.content_copy_rounded,
                             size: 14,
                             color: _copied
                                 ? Colors.green.shade300
@@ -800,7 +1049,6 @@ class _CodeBlockWidgetState extends State<CodeBlockWidget> {
               ],
             ),
           ),
-
           // Code content with syntax highlighting
           Container(
             color: const Color(0xFF0d1117),
@@ -826,91 +1074,90 @@ class _CodeBlockWidgetState extends State<CodeBlockWidget> {
   }
 }
 
-class StreamingCursor extends StatefulWidget {
-  const StreamingCursor({super.key});
-
-  @override
-  State<StreamingCursor> createState() => _StreamingCursorState();
-}
-
-class _StreamingCursorState extends State<StreamingCursor>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 530),
-    );
-    _controller.repeat(reverse: true);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
-    return FadeTransition(
-      opacity: _controller,
-      child: Container(
-        width: 2.5,
-        height: 18,
-        decoration: BoxDecoration(
-          color: cs.primary,
-          borderRadius: BorderRadius.circular(1.5),
-        ),
-      ),
-    );
-  }
-}
-
 class _ChatMessage {
   final String role;
   final List<_Chunk> _chunks = [];
-  final StreamController<int> _updateController = StreamController<int>.broadcast();
+  final StreamController<int> _updateController = StreamController.broadcast();
 
-  _ChatMessage._(this.role, List<_Chunk> initialChunks) {
-    _chunks.addAll(initialChunks);
-  }
+  // Track thinking state
+  bool _isThinkingActive = false;
+  DateTime? _thinkingStartTime;
+  double _thinkingDuration = 0.0;
+  String _rawText = '';
 
-  factory _ChatMessage({required String role, required List<_Chunk> chunks}) {
-    return _ChatMessage._(role, chunks);
-  }
+  _ChatMessage._(this.role);
 
   factory _ChatMessage.fromPlain({
     required String role,
     required String plain,
   }) {
-    final parsed = parseTextToChunks(plain);
-    return _ChatMessage._(
-      role,
-      parsed.isEmpty
-          ? [_Chunk([const _TextSpan('', false)], ChunkType.plain)]
-          : parsed,
-    );
+    final msg = _ChatMessage._(role);
+    msg.updateFromText(plain);
+    return msg;
   }
 
   factory _ChatMessage.emptyAssistant() {
-    return _ChatMessage._('assistant', <_Chunk>[
-      _Chunk([const _TextSpan('', false)], ChunkType.plain),
-    ]);
+    return _ChatMessage._('assistant');
   }
 
-  void updateChunks(List<_Chunk> newChunks) {
+  void updateFromText(String fullText) {
+    // Check previous state
+    final wasThinking = _isThinkingActive;
+
+    // Store the raw text
+    _rawText = fullText;
+
+    // Parse the chunks
+    final parsed = parseTextToChunks(fullText);
     _chunks.clear();
-    _chunks.addAll(newChunks);
+    _chunks.addAll(
+      parsed.isEmpty
+          ? [
+              _Chunk(const [_TextSpan('', false)], ChunkType.plain),
+            ]
+          : parsed,
+    );
+
+    // Check if text has open thinking tag (actively thinking)
+    final hasOpenTag = _hasOpenThinkTag(fullText);
+    final hasClosedTag = _hasClosedThinkTag(fullText);
+
+    // Update thinking active status
+    // Thinking is active if there's an open tag but the most recent one is not closed
+    if (hasOpenTag) {
+      final lastOpenIndex = fullText.lastIndexOf('<think>');
+      final lastCloseIndex = fullText.lastIndexOf('</think>');
+      _isThinkingActive = lastCloseIndex < lastOpenIndex;
+    } else {
+      _isThinkingActive = false;
+    }
+
+    // Handle timing
+    if (!wasThinking && _isThinkingActive) {
+      // Just started thinking
+      _thinkingStartTime = DateTime.now();
+      _thinkingDuration = 0.0;
+    } else if (wasThinking &&
+        !_isThinkingActive &&
+        _thinkingStartTime != null) {
+      // Just stopped thinking - calculate duration
+      final endTime = DateTime.now();
+      _thinkingDuration =
+          endTime.difference(_thinkingStartTime!).inMilliseconds / 1000.0;
+      _thinkingStartTime = null;
+    } else if (!_isThinkingActive && !wasThinking) {
+      // Not thinking and wasn't thinking
+      _thinkingStartTime = null;
+    }
+    // If still thinking (wasThinking && _isThinkingActive), keep the start time
+
     _updateController.add(_chunks.length);
   }
 
   List<_Chunk> get chunks => _chunks;
   Stream<int> get updateStream => _updateController.stream;
+  bool get isThinkingActive => _isThinkingActive;
+  double get thinkingDuration => _thinkingDuration;
 
   void dispose() => _updateController.close();
 }
