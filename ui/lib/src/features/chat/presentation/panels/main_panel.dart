@@ -5,6 +5,177 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:LunarStudio/src/ffi/llm_engine.dart';
+import 'package:flutter_highlight/flutter_highlight.dart';
+import 'package:flutter_highlight/themes/monokai-sublime.dart';
+
+enum ChunkType { plain, thinking, code, heading, bullet }
+
+class _TextSpan {
+  final String text;
+  final bool isBold;
+
+  const _TextSpan(this.text, this.isBold);
+}
+
+class _Chunk {
+  final List<_TextSpan> spans;
+  final ChunkType type;
+  final String? language;
+
+  const _Chunk(this.spans, this.type, {this.language});
+}
+
+/// Parse bold markdown (**text**) into spans
+List<_TextSpan> _parseBoldText(String text) {
+  final List<_TextSpan> spans = [];
+  int idx = 0;
+
+  while (idx < text.length) {
+    final boldStart = text.indexOf('**', idx);
+    if (boldStart == -1) {
+      if (idx < text.length) {
+        spans.add(_TextSpan(text.substring(idx), false));
+      }
+      break;
+    }
+
+    if (boldStart > idx) {
+      spans.add(_TextSpan(text.substring(idx, boldStart), false));
+    }
+
+    final boldEnd = text.indexOf('**', boldStart + 2);
+    if (boldEnd == -1) {
+      spans.add(_TextSpan(text.substring(boldStart), false));
+      break;
+    }
+
+    final boldText = text.substring(boldStart + 2, boldEnd);
+    if (boldText.isNotEmpty) {
+      spans.add(_TextSpan(boldText, true));
+    }
+    idx = boldEnd + 2;
+  }
+
+  return spans;
+}
+
+/// Parse full text including <think>...</think> and visible content.
+List<_Chunk> parseTextToChunks(String text) {
+  final List<_Chunk> chunks = [];
+  int idx = 0;
+
+  while (idx < text.length) {
+    final startTag = text.indexOf('<think>', idx);
+    if (startTag == -1) {
+      final rem = text.substring(idx);
+      if (rem.isNotEmpty) {
+        chunks.addAll(_parseVisibleSegment(rem));
+      }
+      break;
+    }
+
+    if (startTag > idx) {
+      final plain = text.substring(idx, startTag);
+      if (plain.isNotEmpty) {
+        chunks.addAll(_parseVisibleSegment(plain));
+      }
+    }
+
+    final endTag = text.indexOf('</think>', startTag + 7);
+    if (endTag == -1) {
+      final inner = text.substring(startTag + 7);
+      if (inner.isNotEmpty) {
+        chunks.add(_Chunk(_parseBoldText(inner), ChunkType.thinking));
+      }
+      break;
+    } else {
+      final inner = text.substring(startTag + 7, endTag);
+      if (inner.isNotEmpty) {
+        chunks.add(_Chunk(_parseBoldText(inner), ChunkType.thinking));
+      }
+      idx = endTag + 8;
+    }
+  }
+
+  return chunks;
+}
+
+/// Parse only visible text, handling ```code``` and markdown-like structure.
+List<_Chunk> _parseVisibleSegment(String text) {
+  final List<_Chunk> chunks = [];
+  int idx = 0;
+
+  while (idx < text.length) {
+    final fenceStart = text.indexOf('```', idx);
+    if (fenceStart == -1) {
+      _splitPlainIntoLines(text.substring(idx), chunks);
+      break;
+    }
+
+    if (fenceStart > idx) {
+      _splitPlainIntoLines(text.substring(idx, fenceStart), chunks);
+    }
+
+    final langLineEnd = text.indexOf('\n', fenceStart + 3);
+    if (langLineEnd == -1) {
+      _splitPlainIntoLines(text.substring(fenceStart), chunks);
+      break;
+    }
+
+    // Extract language
+    final language = text.substring(fenceStart + 3, langLineEnd).trim();
+
+    final fenceEnd = text.indexOf('```', langLineEnd + 1);
+    if (fenceEnd == -1) {
+      final code = text.substring(langLineEnd + 1);
+      if (code.trim().isNotEmpty) {
+        chunks.add(_Chunk(
+          [_TextSpan(code.trimRight(), false)],
+          ChunkType.code,
+          language: language.isEmpty ? null : language,
+        ));
+      }
+      break;
+    } else {
+      final code = text.substring(langLineEnd + 1, fenceEnd);
+      if (code.trim().isNotEmpty) {
+        chunks.add(_Chunk(
+          [_TextSpan(code.trimRight(), false)],
+          ChunkType.code,
+          language: language.isEmpty ? null : language,
+        ));
+      }
+      idx = fenceEnd + 3;
+    }
+  }
+
+  return chunks;
+}
+
+/// Split plain text into lines and classify as heading, bullet, or plain.
+void _splitPlainIntoLines(String text, List<_Chunk> chunks) {
+  final lines = text.split('\n');
+  for (final rawLine in lines) {
+    final line = rawLine.trimRight();
+    if (line.isEmpty) continue;
+    final trimmedLeft = rawLine.trimLeft();
+
+    if (line.startsWith('### ')) {
+      chunks.add(_Chunk(_parseBoldText(line.substring(4).trimLeft()), ChunkType.heading));
+    } else if (line.startsWith('## ')) {
+      chunks.add(_Chunk(_parseBoldText(line.substring(3).trimLeft()), ChunkType.heading));
+    } else if (line.startsWith('# ')) {
+      chunks.add(_Chunk(_parseBoldText(line.substring(2).trimLeft()), ChunkType.heading));
+    } else if (trimmedLeft.startsWith('- ') || trimmedLeft.startsWith('* ')) {
+      final bulletText = trimmedLeft.substring(2).trimLeft();
+      if (bulletText.isNotEmpty) {
+        chunks.add(_Chunk(_parseBoldText(bulletText), ChunkType.bullet));
+      }
+    } else {
+      chunks.add(_Chunk(_parseBoldText(line), ChunkType.plain));
+    }
+  }
+}
 
 class MainPanel extends StatefulWidget {
   final bool engineReady;
@@ -21,14 +192,10 @@ class _MainPanelState extends State<MainPanel> {
   final FocusNode keyboardFocus = FocusNode();
   final FocusNode textFieldFocus = FocusNode();
 
-  // messages will contain ChatMessage instances that hold their own notifiers
   final List<_ChatMessage> messages = [];
 
   bool get engineReady => widget.engineReady;
   bool isGenerating = false;
-
-  // Batch updates for smoother rendering
-  Timer? _scrollTimer;
 
   @override
   void initState() {
@@ -36,25 +203,12 @@ class _MainPanelState extends State<MainPanel> {
     keyboardFocus.requestFocus();
   }
 
-  // Future<void> _startEngine() async {
-  //   try {
-  //     await LLMEngine().start(
-  //       '/home/abancp/Projects/localGPT1.0/build/liblunarstudio.so',
-  //     );
-  //     if (mounted) setState(() => engineReady = true);
-  //   } catch (e) {
-  //     debugPrint('❌ Engine error: $e');
-  //   }
-  // }
-
   @override
   void dispose() {
-    _scrollTimer?.cancel();
     controller.dispose();
     scrollController.dispose();
     keyboardFocus.dispose();
     textFieldFocus.dispose();
-    // dispose notifiers in messages
     for (final m in messages) {
       m.dispose();
     }
@@ -64,11 +218,15 @@ class _MainPanelState extends State<MainPanel> {
   void _performScroll() {
     if (!mounted || !scrollController.hasClients) return;
 
-    try {
-      scrollController.jumpTo(scrollController.position.maxScrollExtent);
-    } catch (_) {
-      // ignore if layout not ready
-    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && scrollController.hasClients) {
+        scrollController.animateTo(
+          scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOutCubic,
+        );
+      }
+    });
   }
 
   void _onSubmit() {
@@ -77,7 +235,6 @@ class _MainPanelState extends State<MainPanel> {
     final text = controller.text.trim();
     if (text.isEmpty) return;
 
-    // Add user message quickly
     setState(() {
       messages.add(_ChatMessage.fromPlain(role: 'user', plain: text));
       isGenerating = true;
@@ -88,55 +245,24 @@ class _MainPanelState extends State<MainPanel> {
     _runLLM(text);
   }
 
-  List<_Chunk> _parseChunks(String text) {
-    final List<_Chunk> chunks = [];
-    int idx = 0;
-    while (idx < text.length) {
-      final startTag = text.indexOf('<think>', idx);
-      if (startTag == -1) {
-        final rem = text.substring(idx);
-        if (rem.isNotEmpty) chunks.add(_Chunk(rem, isThinking: false));
-        break;
-      }
-      if (startTag > idx) {
-        final plain = text.substring(idx, startTag);
-        if (plain.isNotEmpty) chunks.add(_Chunk(plain, isThinking: false));
-      }
-      final endTag = text.indexOf('</think>', startTag + 7);
-      if (endTag == -1) {
-        final inner = text.substring(startTag + 7);
-        if (inner.isNotEmpty) chunks.add(_Chunk(inner, isThinking: true));
-        break;
-      } else {
-        final inner = text.substring(startTag + 7, endTag);
-        if (inner.isNotEmpty) chunks.add(_Chunk(inner, isThinking: true));
-        idx = endTag + 8;
-      }
-    }
-    return chunks;
-  }
-
   void _runLLM(String prompt) {
-    // Add assistant placeholder message with its own notifier
     final assistantMsg = _ChatMessage.emptyAssistant();
     setState(() {
       messages.add(assistantMsg);
     });
 
-    final int index = messages.length - 1;
     final buffer = StringBuffer();
 
     LLMEngine()
         .generate(prompt, (String tok) {
           if (!mounted) return;
           buffer.write(tok);
-          final parsed = _parseChunks(buffer.toString());
-          // Update only the assistant's notifier — avoids setState per token
+          final parsed = parseTextToChunks(buffer.toString());
           assistantMsg.updateChunks(parsed);
+          _performScroll();
         })
         .then((_) {
           if (!mounted) return;
-          // Stop generation state and finalize: if there are no chunks, keep empty string
           setState(() {
             isGenerating = false;
           });
@@ -144,7 +270,9 @@ class _MainPanelState extends State<MainPanel> {
         })
         .catchError((e) {
           if (!mounted) return;
-          assistantMsg.updateChunks([_Chunk('Error: $e', isThinking: false)]);
+          assistantMsg.updateChunks(
+            [_Chunk([const _TextSpan('Error while generating response.', false)], ChunkType.plain)],
+          );
           setState(() {
             isGenerating = false;
           });
@@ -168,28 +296,41 @@ class _MainPanelState extends State<MainPanel> {
       bPad = 24;
     }
 
-    // Reusable styles to avoid allocations each build
-    final TextStyle plainStyle = TextStyle(color: cs.onSurface, fontSize: 14);
+    final TextStyle plainStyle = TextStyle(
+      color: cs.onSurface,
+      fontSize: 14,
+      height: 1.5,
+      letterSpacing: 0.2,
+    );
     final TextStyle thinkingStyle = TextStyle(
       color: cs.onSurface.withOpacity(0.55),
       fontStyle: FontStyle.italic,
       fontSize: 14,
+      height: 1.5,
     );
 
     return Container(
-      color: cs.background,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            cs.surfaceVariant.withOpacity(0.35),
+            cs.background,
+          ],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
+      ),
       child: Column(
         children: [
           Expanded(
             child: ListView.builder(
               controller: scrollController,
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
               itemCount: messages.length,
               itemBuilder: (context, i) {
                 final msg = messages[i];
                 final bool isUser = msg.role == 'user';
 
-                // compute dynamic max width: up to 90% of screen or 900px max
                 final maxWidth = min(width * 0.9, 900);
 
                 return Align(
@@ -202,18 +343,35 @@ class _MainPanelState extends State<MainPanel> {
                         maxWidth: maxWidth.toDouble(),
                       ),
                       margin: const EdgeInsets.symmetric(vertical: 6),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: isUser
-                            ? cs.primary.withOpacity(0.16)
-                            : cs.surfaceVariant,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: cs.outline),
-                      ),
-                      child: MessageBubble(
-                        msg: msg,
-                        plainStyle: plainStyle,
-                        thinkingStyle: thinkingStyle,
+                      padding: EdgeInsets.zero,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: isUser
+                              ? cs.primary.withOpacity(0.12)
+                              : cs.surface.withOpacity(0.9),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: cs.outline.withOpacity(0.6),
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.06),
+                              blurRadius: 14,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
+                          child: MessageBubble(
+                            msg: msg,
+                            plainStyle: plainStyle,
+                            thinkingStyle: thinkingStyle,
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -234,6 +392,16 @@ class _MainPanelState extends State<MainPanel> {
             },
             child: Container(
               padding: EdgeInsets.fromLTRB(hPad, tPad, hPad, bPad),
+              decoration: BoxDecoration(
+                color: cs.surface.withOpacity(0.85),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.12),
+                    blurRadius: 18,
+                    offset: const Offset(0, -4),
+                  ),
+                ],
+              ),
               child: Column(
                 children: [
                   Container(
@@ -242,8 +410,8 @@ class _MainPanelState extends State<MainPanel> {
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: Colors.transparent,
-                      borderRadius: BorderRadius.circular(14),
+                      color: cs.background.withOpacity(0.9),
+                      borderRadius: BorderRadius.circular(18),
                       border: Border.all(color: cs.outline, width: 1),
                     ),
                     child: Row(
@@ -260,7 +428,7 @@ class _MainPanelState extends State<MainPanel> {
                             style: plainStyle,
                             decoration: InputDecoration(
                               hintText: isGenerating
-                                  ? 'Generating...'
+                                  ? 'Generating response...'
                                   : 'Send a message…',
                               hintStyle: TextStyle(
                                 color: cs.onSurface.withOpacity(0.4),
@@ -278,13 +446,26 @@ class _MainPanelState extends State<MainPanel> {
                         GestureDetector(
                           onTap: isGenerating ? null : _onSubmit,
                           child: Container(
-                            height: 34,
-                            width: 34,
+                            height: 36,
+                            width: 36,
                             decoration: BoxDecoration(
-                              color: isGenerating
-                                  ? cs.primary.withOpacity(0.5)
-                                  : cs.primary,
-                              borderRadius: BorderRadius.circular(8),
+                              gradient: LinearGradient(
+                                colors: [
+                                  cs.primary,
+                                  cs.primary.withOpacity(0.8),
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              borderRadius: BorderRadius.circular(10),
+                              boxShadow: [
+                                if (!isGenerating)
+                                  BoxShadow(
+                                    color: cs.primary.withOpacity(0.4),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 4),
+                                  ),
+                              ],
                             ),
                             child: Icon(
                               Icons.arrow_upward_rounded,
@@ -317,8 +498,6 @@ class _MainPanelState extends State<MainPanel> {
   }
 }
 
-/// Widget that shows a single message bubble's content. Listens to the message's notifier
-/// and rebuilds only when that message's chunks change.
 class MessageBubble extends StatelessWidget {
   final _ChatMessage msg;
   final TextStyle plainStyle;
@@ -331,42 +510,129 @@ class MessageBubble extends StatelessWidget {
     super.key,
   });
 
+  Widget _buildRichText(List<_TextSpan> spans, TextStyle baseStyle) {
+    return RichText(
+      text: TextSpan(
+        children: spans.map((span) {
+          return TextSpan(
+            text: span.text,
+            style: span.isBold
+                ? baseStyle.copyWith(fontWeight: FontWeight.w700)
+                : baseStyle,
+          );
+        }).toList(),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<List<_Chunk>>(
-      valueListenable: msg.chunksNotifier,
-      builder: (context, chunks, _) {
-        // Build a column of chunks; thinking chunks include dots when they are last and marked thinking.
+    return StreamBuilder<int>(
+      stream: msg.updateStream,
+      initialData: 0,
+      builder: (context, snapshot) {
+        final chunks = msg.chunks;
+        if (chunks.isEmpty) return const SizedBox.shrink();
+
         final List<Widget> children = <Widget>[];
 
         for (int i = 0; i < chunks.length; i++) {
           final c = chunks[i];
-          if (c.isThinking) {
-            final bool isLastThinking = i == chunks.length - 1;
-            children.add(
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(child: Text(c.text, style: thinkingStyle)),
-                    if (isLastThinking) const SizedBox(width: 8),
-                    if (isLastThinking) ThinkingDots(),
-                  ],
+          final bool isLast = i == chunks.length - 1;
+
+          switch (c.type) {
+            case ChunkType.thinking:
+              children.add(
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: _buildRichText(c.spans, thinkingStyle),
+                      ),
+                      if (isLast) const SizedBox(width: 8),
+                      if (isLast) const StreamingCursor(),
+                    ],
+                  ),
                 ),
-              ),
-            );
-          } else {
-            children.add(
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Text(c.text, style: plainStyle),
-              ),
-            );
+              );
+              break;
+
+            case ChunkType.code:
+              children.add(
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: CodeBlockWidget(
+                    code: c.spans.map((s) => s.text).join(),
+                    language: c.language ?? 'plaintext',
+                  ),
+                ),
+              );
+              break;
+
+            case ChunkType.heading:
+              children.add(
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6, top: 4),
+                  child: _buildRichText(
+                    c.spans,
+                    plainStyle.copyWith(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16.5,
+                    ),
+                  ),
+                ),
+              );
+              break;
+
+            case ChunkType.bullet:
+              children.add(
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 3, left: 4),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Container(
+                          width: 5,
+                          height: 5,
+                          decoration: BoxDecoration(
+                            color: plainStyle.color?.withOpacity(0.7),
+                            shape: BoxShape.circle,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: _buildRichText(c.spans, plainStyle),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+              break;
+
+            case ChunkType.plain:
+              children.add(
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: _buildRichText(c.spans, plainStyle),
+                      ),
+                      if (isLast) const SizedBox(width: 4),
+                      if (isLast) const StreamingCursor(),
+                    ],
+                  ),
+                ),
+              );
+              break;
           }
         }
-
-        if (children.isEmpty) return const SizedBox.shrink();
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -378,32 +644,211 @@ class MessageBubble extends StatelessWidget {
   }
 }
 
-/// Small widget that runs its own lightweight animation for dots and auto-starts/stops.
-class ThinkingDots extends StatefulWidget {
-  const ThinkingDots({super.key});
+class CodeBlockWidget extends StatefulWidget {
+  final String code;
+  final String language;
+
+  const CodeBlockWidget({
+    required this.code,
+    required this.language,
+    super.key,
+  });
 
   @override
-  State<ThinkingDots> createState() => _ThinkingDotsState();
+  State<CodeBlockWidget> createState() => _CodeBlockWidgetState();
 }
 
-class _ThinkingDotsState extends State<ThinkingDots>
+class _CodeBlockWidgetState extends State<CodeBlockWidget> {
+  bool _copied = false;
+
+  void _copyToClipboard() {
+    Clipboard.setData(ClipboardData(text: widget.code));
+    setState(() {
+      _copied = true;
+    });
+
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) {
+        setState(() {
+          _copied = false;
+        });
+      }
+    });
+  }
+
+  String _getDisplayLanguage() {
+    final lang = widget.language.toLowerCase();
+    final langMap = {
+      'dart': 'Dart',
+      'python': 'Python',
+      'javascript': 'JavaScript',
+      'typescript': 'TypeScript',
+      'java': 'Java',
+      'cpp': 'C++',
+      'c': 'C',
+      'csharp': 'C#',
+      'go': 'Go',
+      'rust': 'Rust',
+      'kotlin': 'Kotlin',
+      'swift': 'Swift',
+      'ruby': 'Ruby',
+      'php': 'PHP',
+      'html': 'HTML',
+      'css': 'CSS',
+      'json': 'JSON',
+      'yaml': 'YAML',
+      'bash': 'Bash',
+      'shell': 'Shell',
+      'sql': 'SQL',
+    };
+    return langMap[lang] ?? lang.toUpperCase();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.1),
+          width: 1,
+        ),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Header
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1a1b26),
+              border: Border(
+                bottom: BorderSide(
+                  color: Colors.white.withOpacity(0.08),
+                  width: 1,
+                ),
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.code_rounded,
+                  size: 16,
+                  color: Colors.white.withOpacity(0.6),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  _getDisplayLanguage(),
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.8),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const Spacer(),
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: _copyToClipboard,
+                    borderRadius: BorderRadius.circular(6),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _copied
+                            ? Colors.green.withOpacity(0.15)
+                            : Colors.white.withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: _copied
+                              ? Colors.green.withOpacity(0.3)
+                              : Colors.white.withOpacity(0.1),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _copied ? Icons.check_rounded : Icons.content_copy_rounded,
+                            size: 14,
+                            color: _copied
+                                ? Colors.green.shade300
+                                : Colors.white.withOpacity(0.7),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            _copied ? 'Copied!' : 'Copy',
+                            style: TextStyle(
+                              color: _copied
+                                  ? Colors.green.shade300
+                                  : Colors.white.withOpacity(0.7),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Code content with syntax highlighting
+          Container(
+            color: const Color(0xFF0d1117),
+            padding: const EdgeInsets.all(14),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: HighlightView(
+                widget.code,
+                language: widget.language,
+                theme: monokaiSublimeTheme,
+                padding: EdgeInsets.zero,
+                textStyle: const TextStyle(
+                  fontFamily: 'monospace',
+                  fontSize: 13,
+                  height: 1.5,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class StreamingCursor extends StatefulWidget {
+  const StreamingCursor({super.key});
+
+  @override
+  State<StreamingCursor> createState() => _StreamingCursorState();
+}
+
+class _StreamingCursorState extends State<StreamingCursor>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
 
   @override
   void initState() {
     super.initState();
-    // short loop, lightweight
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 900),
+      duration: const Duration(milliseconds: 530),
     );
-    _controller.repeat();
+    _controller.repeat(reverse: true);
   }
 
   @override
   void dispose() {
-    _controller.stop();
     _controller.dispose();
     super.dispose();
   }
@@ -411,46 +856,29 @@ class _ThinkingDotsState extends State<ThinkingDots>
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final TextStyle dotStyle = TextStyle(
-      color: cs.onSurface.withOpacity(0.55),
-      fontStyle: FontStyle.italic,
-      fontSize: 14,
-    );
 
-    return SizedBox(
-      width: 36,
-      child: AnimatedBuilder(
-        animation: _controller,
-        builder: (context, _) {
-          final step = (_controller.value * 3).floor();
-          final dots = '.' * (step + 1);
-          return Text(
-            dots,
-            style: dotStyle,
-            maxLines: 1,
-            overflow: TextOverflow.clip,
-          );
-        },
+    return FadeTransition(
+      opacity: _controller,
+      child: Container(
+        width: 2.5,
+        height: 18,
+        decoration: BoxDecoration(
+          color: cs.primary,
+          borderRadius: BorderRadius.circular(1.5),
+        ),
       ),
     );
   }
 }
 
-/// Small immutable chunk (plain or thinking)
-class _Chunk {
-  final String text;
-  final bool isThinking;
-
-  const _Chunk(this.text, {required this.isThinking});
-}
-
-/// Message object that owns a ValueNotifier for per-message updates.
 class _ChatMessage {
   final String role;
-  final ValueNotifier<List<_Chunk>> chunksNotifier;
+  final List<_Chunk> _chunks = [];
+  final StreamController<int> _updateController = StreamController<int>.broadcast();
 
-  _ChatMessage._(this.role, List<_Chunk> initial)
-    : chunksNotifier = ValueNotifier<List<_Chunk>>(initial);
+  _ChatMessage._(this.role, List<_Chunk> initialChunks) {
+    _chunks.addAll(initialChunks);
+  }
 
   factory _ChatMessage({required String role, required List<_Chunk> chunks}) {
     return _ChatMessage._(role, chunks);
@@ -460,48 +888,29 @@ class _ChatMessage {
     required String role,
     required String plain,
   }) {
-    final parsed = _parsePlain(plain);
-    return _ChatMessage._(role, parsed);
+    final parsed = parseTextToChunks(plain);
+    return _ChatMessage._(
+      role,
+      parsed.isEmpty
+          ? [_Chunk([const _TextSpan('', false)], ChunkType.plain)]
+          : parsed,
+    );
   }
 
   factory _ChatMessage.emptyAssistant() {
-    return _ChatMessage._('assistant', <_Chunk>[_Chunk('', isThinking: false)]);
+    return _ChatMessage._('assistant', <_Chunk>[
+      _Chunk([const _TextSpan('', false)], ChunkType.plain),
+    ]);
   }
 
   void updateChunks(List<_Chunk> newChunks) {
-    // Replace entire list atomically — ValueNotifier will notify listeners.
-    chunksNotifier.value = List<_Chunk>.unmodifiable(newChunks);
+    _chunks.clear();
+    _chunks.addAll(newChunks);
+    _updateController.add(_chunks.length);
   }
 
-  List<_Chunk> get chunks => chunksNotifier.value;
+  List<_Chunk> get chunks => _chunks;
+  Stream<int> get updateStream => _updateController.stream;
 
-  void dispose() => chunksNotifier.dispose();
-
-  static List<_Chunk> _parsePlain(String text) {
-    final List<_Chunk> chunks = [];
-    int idx = 0;
-    while (idx < text.length) {
-      final startTag = text.indexOf('<think>', idx);
-      if (startTag == -1) {
-        final rem = text.substring(idx);
-        if (rem.isNotEmpty) chunks.add(_Chunk(rem, isThinking: false));
-        break;
-      }
-      if (startTag > idx) {
-        final plain = text.substring(idx, startTag);
-        if (plain.isNotEmpty) chunks.add(_Chunk(plain, isThinking: false));
-      }
-      final endTag = text.indexOf('</think>', startTag + 7);
-      if (endTag == -1) {
-        final inner = text.substring(startTag + 7);
-        if (inner.isNotEmpty) chunks.add(_Chunk(inner, isThinking: true));
-        break;
-      } else {
-        final inner = text.substring(startTag + 7, endTag);
-        if (inner.isNotEmpty) chunks.add(_Chunk(inner, isThinking: true));
-        idx = endTag + 8;
-      }
-    }
-    return chunks;
-  }
+  void dispose() => _updateController.close();
 }
