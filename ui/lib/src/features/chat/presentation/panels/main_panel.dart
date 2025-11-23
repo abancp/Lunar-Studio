@@ -297,15 +297,15 @@ class _MainPanelState extends State<MainPanel> {
   // Calculate input bar padding to match chat
   EdgeInsets _getInputBarPadding(double width) {
     if (width < 600) {
-      return const EdgeInsets.fromLTRB(16, 12, 16, 16);
+      return const EdgeInsets.fromLTRB(16, 1, 16, 2);
     } else if (width < 900) {
-      return const EdgeInsets.fromLTRB(32, 14, 32, 18);
+      return const EdgeInsets.fromLTRB(32, 1, 32, 2);
     } else if (width < 1200) {
-      return const EdgeInsets.fromLTRB(80, 16, 80, 20);
+      return const EdgeInsets.fromLTRB(80, 1, 80, 2);
     } else if (width < 1600) {
-      return const EdgeInsets.fromLTRB(150, 16, 150, 20);
+      return const EdgeInsets.fromLTRB(150, 1, 150, 2);
     } else {
-      return const EdgeInsets.fromLTRB(280, 18, 280, 22);
+      return const EdgeInsets.fromLTRB(280, 1, 280, 2);
     }
   }
 
@@ -348,13 +348,13 @@ class _MainPanelState extends State<MainPanel> {
               itemBuilder: (context, i) {
                 final msg = messages[i];
                 final bool isUser = msg.role == 'user';
-                
+
                 // Max width for bubbles (responsive)
-                final maxWidth = width < 600 
-                    ? width * 0.85 
-                    : width < 900 
-                        ? width * 0.8 
-                        : min(width * 0.75, 900.0);
+                final maxWidth = width < 600
+                    ? width * 0.85
+                    : width < 900
+                    ? width * 0.8
+                    : min(width * 0.75, 900.0);
 
                 return Align(
                   alignment: isUser
@@ -362,9 +362,7 @@ class _MainPanelState extends State<MainPanel> {
                       : Alignment.centerLeft,
                   child: RepaintBoundary(
                     child: Container(
-                      constraints: BoxConstraints(
-                        maxWidth: maxWidth,
-                      ),
+                      constraints: BoxConstraints(maxWidth: maxWidth),
                       margin: EdgeInsets.symmetric(
                         vertical: width < 600 ? 6 : 8,
                       ),
@@ -419,14 +417,14 @@ class _MainPanelState extends State<MainPanel> {
             child: Container(
               padding: inputPadding,
               decoration: BoxDecoration(
-                color: cs.surface.withOpacity(0.92),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.12),
-                    blurRadius: 18,
-                    offset: const Offset(0, -4),
-                  ),
-                ],
+                color: Colors.transparent,
+                // boxShadow: [
+                //   BoxShadow(
+                //     color: Colors.black.withOpacity(0.12),
+                //     blurRadius: 18,
+                //     offset: const Offset(0, -4),
+                //   ),
+                // ],
               ),
               child: Column(
                 children: [
@@ -1010,7 +1008,7 @@ class _CodeBlockWidgetState extends State<CodeBlockWidget> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final width = MediaQuery.of(context).size.width;
-    
+
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(width < 600 ? 10 : 12),
