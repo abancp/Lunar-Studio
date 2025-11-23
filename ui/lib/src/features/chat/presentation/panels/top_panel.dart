@@ -7,6 +7,7 @@ class TopPanel extends StatefulWidget {
   final String loadedModel;
   final ValueChanged<String> onModelChange;
   final Future<void> Function() onLoadModel;
+  final void Function() toggleShowLeftPanel;
 
   const TopPanel({
     super.key,
@@ -14,6 +15,7 @@ class TopPanel extends StatefulWidget {
     required this.onModelChange,
     required this.onLoadModel,
     required this.loadedModel,
+    required this.toggleShowLeftPanel,
   });
 
   @override
@@ -35,14 +37,14 @@ class _TopPanelState extends State<TopPanel> {
       child: Row(
         children: [
           IconButton(
-            padding: EdgeInsets.zero,
+            padding: EdgeInsets.symmetric(vertical: 4),
             constraints: const BoxConstraints(minWidth: 28),
             icon: Icon(
               BootstrapIcons.layout_sidebar,
               size: 16,
               color: cs.onSurface,
             ),
-            onPressed: () {},
+            onPressed: widget.toggleShowLeftPanel,
           ),
 
           // Center section

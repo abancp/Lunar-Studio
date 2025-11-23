@@ -1,6 +1,7 @@
 // lib/src/features/chat/presentation/panels/main_panel.dart
 import 'dart:async';
 import 'dart:math';
+import 'package:LunarStudio/src/core/db/app_db.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:LunarStudio/src/ffi/llm_engine.dart';
@@ -9,6 +10,7 @@ import 'package:flutter_highlight/themes/atom-one-dark.dart';
 import 'package:flutter_highlight/themes/mono-blue.dart';
 import 'package:flutter_highlight/themes/monokai-sublime.dart';
 import 'package:flutter_highlight/themes/vs2015.dart';
+import 'package:path/path.dart';
 
 enum ChunkType { plain, thinking, code, heading, bullet }
 
@@ -180,9 +182,45 @@ void _splitPlainIntoLines(String text, List<_Chunk> chunks) {
   }
 }
 
+void addMessageToChat(
+  String content,
+  int chatId,
+  String role,
+  int seq,
+  void Function(int) setChatId,
+) async {
+  final db = await AppDB.instance;
+  final now = DateTime.now().millisecondsSinceEpoch;
+  int id = chatId;
+  if (chatId == -1) {
+    id = await db.insert('chats', {
+      'title': 'New Chat',
+      'created_at': now,
+      'updated_at': now,
+    });
+    setChatId(id);
+  }
+
+  await db.insert('messages', {
+    'chat_id': id,
+    'role': role,
+    'content': content,
+    'sequence': seq,
+    'created_at': now,
+  });
+}
+
 class MainPanel extends StatefulWidget {
   final bool engineReady;
-  const MainPanel({super.key, required this.engineReady});
+  final int chatId;
+  final void Function(int) setChatId;
+
+  const MainPanel({
+    super.key,
+    required this.engineReady,
+    required this.chatId,
+    required this.setChatId,
+  });
 
   @override
   State<MainPanel> createState() => _MainPanelState();
@@ -196,6 +234,7 @@ class _MainPanelState extends State<MainPanel> {
   final List<_ChatMessage> messages = [];
   bool get engineReady => widget.engineReady;
   bool isGenerating = false;
+  int seq = 0;
 
   @override
   void initState() {
@@ -236,6 +275,8 @@ class _MainPanelState extends State<MainPanel> {
       messages.add(_ChatMessage.fromPlain(role: 'user', plain: text));
       isGenerating = true;
     });
+    addMessageToChat(text, widget.chatId, "user", seq + 1, widget.setChatId);
+    seq++;
     controller.clear();
     _performScroll();
     _runLLM(text);
@@ -258,8 +299,15 @@ class _MainPanelState extends State<MainPanel> {
           assistantMsg.updateFromText(fullText);
           _performScroll();
         })
-        .then((_) {
+        .then((res) {
           if (!mounted) return;
+          addMessageToChat(
+            res,
+            widget.chatId,
+            'assistant',
+            seq + 1,
+            widget.setChatId,
+          );
           setState(() {
             isGenerating = false;
           });
@@ -338,190 +386,319 @@ class _MainPanelState extends State<MainPanel> {
           end: Alignment.bottomCenter,
         ),
       ),
-      child: Column(
-        children: [
-          Expanded(
-            child: ListView.builder(
-              controller: scrollController,
-              padding: chatPadding,
-              itemCount: messages.length,
-              itemBuilder: (context, i) {
-                final msg = messages[i];
-                final bool isUser = msg.role == 'user';
+      child: messages.isNotEmpty
+          ? Column(
+              children: [
+                Expanded(
+                  child: ListView.builder(
+                    controller: scrollController,
+                    padding: chatPadding,
+                    itemCount: messages.length,
+                    itemBuilder: (context, i) {
+                      final msg = messages[i];
+                      final bool isUser = msg.role == 'user';
 
-                // Max width for bubbles (responsive)
-                final maxWidth = width < 600
-                    ? width * 0.85
-                    : width < 900
-                    ? width * 0.8
-                    : min(width * 0.75, 900.0);
+                      // Max width for bubbles (responsive)
+                      final maxWidth = width < 600
+                          ? width * 0.85
+                          : width < 900
+                          ? width * 0.8
+                          : min(width * 0.75, 900.0);
 
-                return Align(
-                  alignment: isUser
-                      ? Alignment.centerRight
-                      : Alignment.centerLeft,
-                  child: RepaintBoundary(
-                    child: Container(
-                      constraints: BoxConstraints(maxWidth: maxWidth),
-                      margin: EdgeInsets.symmetric(
-                        vertical: width < 600 ? 6 : 8,
-                      ),
-                      padding: EdgeInsets.zero,
-                      child: DecoratedBox(
-                        decoration: isUser
-                            ? BoxDecoration(
-                                color: cs.primary.withOpacity(0.12),
-                                borderRadius: BorderRadius.circular(
-                                  width < 600 ? 12 : 16,
-                                ),
-                                border: Border.all(
-                                  color: cs.outline.withOpacity(0.6),
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.06),
-                                    blurRadius: width < 600 ? 10 : 14,
-                                    offset: Offset(0, width < 600 ? 4 : 6),
-                                  ),
-                                ],
-                              )
-                            : const BoxDecoration(),
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: width < 600 ? 12 : 16,
-                            vertical: width < 600 ? 10 : 12,
-                          ),
-                          child: MessageBubble(
-                            msg: msg,
-                            plainStyle: plainStyle,
-                            thinkingStyle: thinkingStyle,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-          RawKeyboardListener(
-            focusNode: keyboardFocus,
-            autofocus: true,
-            onKey: (event) {
-              if (event is RawKeyDownEvent &&
-                  event.logicalKey == LogicalKeyboardKey.enter &&
-                  !event.isShiftPressed) {
-                _onSubmit();
-              }
-            },
-            child: Container(
-              padding: inputPadding,
-              decoration: BoxDecoration(
-                color: Colors.transparent,
-                // boxShadow: [
-                //   BoxShadow(
-                //     color: Colors.black.withOpacity(0.12),
-                //     blurRadius: 18,
-                //     offset: const Offset(0, -4),
-                //   ),
-                // ],
-              ),
-              child: Column(
-                children: [
-                  Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: width < 600 ? 10 : 12,
-                      vertical: width < 600 ? 4 : 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: cs.background.withOpacity(0.9),
-                      borderRadius: BorderRadius.circular(
-                        width < 600 ? 16 : 18,
-                      ),
-                      border: Border.all(color: cs.outline, width: 1),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            focusNode: textFieldFocus,
-                            controller: controller,
-                            enabled: !isGenerating,
-                            minLines: 1,
-                            maxLines: width < 600 ? 6 : 8,
-                            keyboardType: TextInputType.multiline,
-                            style: plainStyle,
-                            decoration: InputDecoration(
-                              hintText: isGenerating
-                                  ? 'Generating response...'
-                                  : 'Send a message…',
-                              hintStyle: TextStyle(
-                                color: cs.onSurface.withOpacity(0.4),
-                              ),
-                              border: InputBorder.none,
-                              isCollapsed: true,
-                              contentPadding: EdgeInsets.symmetric(
-                                vertical: width < 600 ? 8 : 10,
-                              ),
-                            ),
-                            onSubmitted: (_) => _onSubmit(),
-                          ),
-                        ),
-                        SizedBox(width: width < 600 ? 6 : 8),
-                        GestureDetector(
-                          onTap: isGenerating ? null : _onSubmit,
+                      return Align(
+                        alignment: isUser
+                            ? Alignment.centerRight
+                            : Alignment.centerLeft,
+                        child: RepaintBoundary(
                           child: Container(
-                            height: width < 600 ? 34 : 38,
-                            width: width < 600 ? 34 : 38,
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  cs.primary,
-                                  cs.primary.withOpacity(0.8),
-                                ],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                              borderRadius: BorderRadius.circular(
-                                width < 600 ? 8 : 10,
-                              ),
-                              boxShadow: [
-                                if (!isGenerating)
-                                  BoxShadow(
-                                    color: cs.primary.withOpacity(0.4),
-                                    blurRadius: 10,
-                                    offset: const Offset(0, 4),
-                                  ),
-                              ],
+                            constraints: BoxConstraints(maxWidth: maxWidth),
+                            margin: EdgeInsets.symmetric(
+                              vertical: width < 600 ? 6 : 8,
                             ),
-                            child: Icon(
-                              Icons.arrow_upward_rounded,
-                              size: width < 600 ? 18 : 20,
-                              color: cs.onPrimary,
+                            padding: EdgeInsets.zero,
+                            child: DecoratedBox(
+                              decoration: isUser
+                                  ? BoxDecoration(
+                                      color: cs.primary.withOpacity(0.12),
+                                      borderRadius: BorderRadius.circular(
+                                        width < 600 ? 12 : 16,
+                                      ),
+                                      border: Border.all(
+                                        color: cs.outline.withOpacity(0.6),
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.06),
+                                          blurRadius: width < 600 ? 10 : 14,
+                                          offset: Offset(
+                                            0,
+                                            width < 600 ? 4 : 6,
+                                          ),
+                                        ),
+                                      ],
+                                    )
+                                  : const BoxDecoration(),
+                              child: Padding(
+                                padding: EdgeInsets.symmetric(
+                                  horizontal: width < 600 ? 12 : 16,
+                                  vertical: width < 600 ? 10 : 12,
+                                ),
+                                child: MessageBubble(
+                                  msg: msg,
+                                  plainStyle: plainStyle,
+                                  thinkingStyle: thinkingStyle,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                RawKeyboardListener(
+                  focusNode: keyboardFocus,
+                  autofocus: true,
+                  onKey: (event) {
+                    if (event is RawKeyDownEvent &&
+                        event.logicalKey == LogicalKeyboardKey.enter &&
+                        !event.isShiftPressed) {
+                      _onSubmit();
+                    }
+                  },
+                  child: Container(
+                    padding: inputPadding,
+                    decoration: BoxDecoration(
+                      color: Colors.transparent,
+                      // boxShadow: [
+                      //   BoxShadow(
+                      //     color: Colors.black.withOpacity(0.12),
+                      //     blurRadius: 18,
+                      //     offset: const Offset(0, -4),
+                      //   ),
+                      // ],
+                    ),
+                    child: Column(
+                      children: [
+                        Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: width < 600 ? 10 : 12,
+                            vertical: width < 600 ? 4 : 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: cs.background.withOpacity(0.9),
+                            borderRadius: BorderRadius.circular(
+                              width < 600 ? 16 : 18,
+                            ),
+                            border: Border.all(color: cs.outline, width: 1),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Expanded(
+                                child: TextField(
+                                  focusNode: textFieldFocus,
+                                  controller: controller,
+                                  enabled: !isGenerating,
+                                  minLines: 1,
+                                  maxLines: width < 600 ? 6 : 8,
+                                  keyboardType: TextInputType.multiline,
+                                  style: plainStyle,
+                                  decoration: InputDecoration(
+                                    hintText: isGenerating
+                                        ? 'Generating response...'
+                                        : 'Send a message…',
+                                    hintStyle: TextStyle(
+                                      color: cs.onSurface.withOpacity(0.4),
+                                    ),
+                                    border: InputBorder.none,
+                                    isCollapsed: true,
+                                    contentPadding: EdgeInsets.symmetric(
+                                      vertical: width < 600 ? 8 : 10,
+                                    ),
+                                  ),
+                                  onSubmitted: (_) => _onSubmit(),
+                                ),
+                              ),
+                              SizedBox(width: width < 600 ? 6 : 8),
+                              GestureDetector(
+                                onTap: isGenerating ? null : _onSubmit,
+                                child: Container(
+                                  height: width < 600 ? 34 : 38,
+                                  width: width < 600 ? 34 : 38,
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      colors: [
+                                        cs.primary,
+                                        cs.primary.withOpacity(0.8),
+                                      ],
+                                      begin: Alignment.topLeft,
+                                      end: Alignment.bottomRight,
+                                    ),
+                                    borderRadius: BorderRadius.circular(
+                                      width < 600 ? 8 : 10,
+                                    ),
+                                    boxShadow: [
+                                      if (!isGenerating)
+                                        BoxShadow(
+                                          color: cs.primary.withOpacity(0.4),
+                                          blurRadius: 10,
+                                          offset: const Offset(0, 4),
+                                        ),
+                                    ],
+                                  ),
+                                  child: Icon(
+                                    Icons.arrow_upward_rounded,
+                                    size: width < 600 ? 18 : 20,
+                                    color: cs.onPrimary,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        SizedBox(height: 3),
+                        Align(
+                          alignment: Alignment.bottomCenter,
+                          child: Text(
+                            'Responses from AI may be incorrect.',
+                            style: TextStyle(
+                              color: cs.onSurface.withOpacity(0.4),
+                              fontSize: width < 600 ? 9 : 10,
                             ),
                           ),
                         ),
                       ],
                     ),
                   ),
-                  SizedBox(height: 3),
-                  Align(
-                    alignment: Alignment.bottomCenter,
-                    child: Text(
-                      'Responses from AI may be incorrect.',
-                      style: TextStyle(
-                        color: cs.onSurface.withOpacity(0.4),
-                        fontSize: width < 600 ? 9 : 10,
+                ),
+              ],
+            )
+          : Flex(
+              direction: Axis.vertical,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Center(
+                  child: RawKeyboardListener(
+                    focusNode: keyboardFocus,
+                    autofocus: true,
+                    onKey: (event) {
+                      if (event is RawKeyDownEvent &&
+                          event.logicalKey == LogicalKeyboardKey.enter &&
+                          !event.isShiftPressed) {
+                        _onSubmit();
+                      }
+                    },
+                    child: Container(
+                      padding: inputPadding,
+                      decoration: BoxDecoration(
+                        color: Colors.transparent,
+                        // boxShadow: [
+                        //   BoxShadow(
+                        //     color: Colors.black.withOpacity(0.12),
+                        //     blurRadius: 18,
+                        //     offset: const Offset(0, -4),
+                        //   ),
+                        // ],
+                      ),
+                      child: Column(
+                        children: [
+                          Container(
+                            padding: EdgeInsets.symmetric(
+                              horizontal: width < 600 ? 10 : 12,
+                              vertical: width < 600 ? 4 : 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: cs.background.withOpacity(0.9),
+                              borderRadius: BorderRadius.circular(
+                                width < 600 ? 16 : 18,
+                              ),
+                              border: Border.all(color: cs.outline, width: 1),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    focusNode: textFieldFocus,
+                                    controller: controller,
+                                    enabled: !isGenerating,
+                                    minLines: 1,
+                                    maxLines: width < 600 ? 6 : 8,
+                                    keyboardType: TextInputType.multiline,
+                                    style: plainStyle,
+                                    decoration: InputDecoration(
+                                      hintText: isGenerating
+                                          ? 'Generating response...'
+                                          : 'Send a message…',
+                                      hintStyle: TextStyle(
+                                        color: cs.onSurface.withOpacity(0.4),
+                                      ),
+                                      border: InputBorder.none,
+                                      isCollapsed: true,
+                                      contentPadding: EdgeInsets.symmetric(
+                                        vertical: width < 600 ? 8 : 10,
+                                      ),
+                                    ),
+                                    onSubmitted: (_) => _onSubmit(),
+                                  ),
+                                ),
+                                SizedBox(width: width < 600 ? 6 : 8),
+                                GestureDetector(
+                                  onTap: isGenerating ? null : _onSubmit,
+                                  child: Container(
+                                    height: width < 600 ? 34 : 38,
+                                    width: width < 600 ? 34 : 38,
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: [
+                                          cs.primary,
+                                          cs.primary.withOpacity(0.8),
+                                        ],
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                      ),
+                                      borderRadius: BorderRadius.circular(
+                                        width < 600 ? 8 : 10,
+                                      ),
+                                      boxShadow: [
+                                        if (!isGenerating)
+                                          BoxShadow(
+                                            color: cs.primary.withOpacity(0.4),
+                                            blurRadius: 10,
+                                            offset: const Offset(0, 4),
+                                          ),
+                                      ],
+                                    ),
+                                    child: Icon(
+                                      Icons.arrow_upward_rounded,
+                                      size: width < 600 ? 18 : 20,
+                                      color: cs.onPrimary,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          SizedBox(height: 3),
+                          Align(
+                            alignment: Alignment.bottomCenter,
+                            child: Text(
+                              'Responses from AI may be incorrect.',
+                              style: TextStyle(
+                                color: cs.onSurface.withOpacity(0.4),
+                                fontSize: width < 600 ? 9 : 10,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ),
-        ],
-      ),
     );
   }
 }

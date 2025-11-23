@@ -22,6 +22,8 @@ class _ChatPageState extends State<ChatPage> {
   bool importing = false;
   bool engineReady = false;
   String loadedModel = "";
+  bool showLeftPanel = true;
+  int chatId = -1;
 
   @override
   void initState() {
@@ -29,6 +31,18 @@ class _ChatPageState extends State<ChatPage> {
     LLMEngine().init(
       "/home/abancp/Projects/Lunar-Studio/build/liblunarstudio.so",
     );
+  }
+
+  void toggleShowLeftPanel() {
+    setState(() {
+      showLeftPanel = !showLeftPanel;
+    });
+  }
+
+  void setChatId(int id) {
+    setState(() {
+      chatId = id;
+    });
   }
 
   Future<void> updateModel(String model) async {
@@ -112,15 +126,24 @@ class _ChatPageState extends State<ChatPage> {
             onModelChange: updateModel,
             onLoadModel: loadModel,
             loadedModel: loadedModel,
+            toggleShowLeftPanel: toggleShowLeftPanel,
           ),
           Expanded(
             child: Row(
               children: [
-                // SizedBox(
-                //   width: 240, // side panel width
-                //   child: LeftPanel(),
-                // ),
-                Expanded(child: MainPanel(engineReady: engineReady)),
+                showLeftPanel
+                    ? SizedBox(
+                        width: 240, // side panel width
+                        child: LeftPanel(),
+                      )
+                    : SizedBox.shrink(),
+                Expanded(
+                  child: MainPanel(
+                    engineReady: engineReady,
+                    chatId: chatId,
+                    setChatId: setChatId,
+                  ),
+                ),
               ],
             ),
           ),

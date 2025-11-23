@@ -22,7 +22,7 @@ class _LeftPanelState extends State<LeftPanel> {
 
     final data = await db.query(
       'chats',
-      orderBy: 'updated_at DESC', // recent chats first
+      orderBy: 'updated_at DESC', 
     );
 
     setState(() => chats = data);

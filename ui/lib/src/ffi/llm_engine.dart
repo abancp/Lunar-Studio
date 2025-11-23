@@ -89,7 +89,7 @@ class LLMEngine {
     }
   }
 
-  Future<void> generate(
+  Future<String> generate(
     String prompt,
     void Function(String tok) onToken,
   ) async {
@@ -99,25 +99,28 @@ class LLMEngine {
       );
       throw StateError("Engine not ready");
     }
-    // print("[Engine] generate() → $prompt");
 
+    final completer = Completer<String>();
+    String res = "";
     final id = DateTime.now().microsecondsSinceEpoch;
     final rp = ReceivePort();
 
     late StreamSubscription sub;
     sub = rp.listen((msg) {
-      // print("[Engine] Received: $msg");
       final cmd = msg["cmd"];
 
       if (cmd == "token" && msg["id"] == id) {
-        // print("[Engine] Token: '${msg["token"]}'");
+        res += msg["token"];
+        debugPrint(res);
         onToken(msg["token"]);
       }
 
       if (cmd == "done" && msg["id"] == id) {
-        // print("[Engine] DONE id=$id");
         sub.cancel();
         rp.close();
+        if (!completer.isCompleted) {
+          completer.complete(res);
+        }
       }
     });
 
@@ -127,5 +130,7 @@ class LLMEngine {
       'prompt': prompt,
       'reply': rp.sendPort, // ← KEY: pass the reply port
     });
+
+    return completer.future;
   }
 }
