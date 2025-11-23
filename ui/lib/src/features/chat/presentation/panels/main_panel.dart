@@ -297,15 +297,15 @@ class _MainPanelState extends State<MainPanel> {
   // Calculate input bar padding to match chat
   EdgeInsets _getInputBarPadding(double width) {
     if (width < 600) {
-      return const EdgeInsets.fromLTRB(16, 1, 16, 2);
+      return const EdgeInsets.fromLTRB(16, 1, 16, 3);
     } else if (width < 900) {
-      return const EdgeInsets.fromLTRB(32, 1, 32, 2);
+      return const EdgeInsets.fromLTRB(32, 1, 32, 3);
     } else if (width < 1200) {
-      return const EdgeInsets.fromLTRB(80, 1, 80, 2);
+      return const EdgeInsets.fromLTRB(80, 1, 80, 3);
     } else if (width < 1600) {
-      return const EdgeInsets.fromLTRB(150, 1, 150, 2);
+      return const EdgeInsets.fromLTRB(150, 1, 150, 3);
     } else {
-      return const EdgeInsets.fromLTRB(280, 1, 280, 2);
+      return const EdgeInsets.fromLTRB(280, 1, 280, 3);
     }
   }
 
@@ -505,7 +505,7 @@ class _MainPanelState extends State<MainPanel> {
                       ],
                     ),
                   ),
-                  SizedBox(height: width < 600 ? 6 : 8),
+                  SizedBox(height: 3),
                   Align(
                     alignment: Alignment.bottomCenter,
                     child: Text(

@@ -4,6 +4,7 @@ import 'package:LunarStudio/src/features/chat/presentation/widgets/model_select_
 
 class TopPanel extends StatefulWidget {
   final String selectedModel;
+  final String loadedModel;
   final ValueChanged<String> onModelChange;
   final Future<void> Function() onLoadModel;
 
@@ -12,6 +13,7 @@ class TopPanel extends StatefulWidget {
     required this.selectedModel,
     required this.onModelChange,
     required this.onLoadModel,
+    required this.loadedModel,
   });
 
   @override
@@ -28,9 +30,7 @@ class _TopPanelState extends State<TopPanel> {
       padding: const EdgeInsets.symmetric(horizontal: 10),
       decoration: BoxDecoration(
         color: cs.surface,
-        border: Border(
-          bottom: BorderSide(color: cs.outline, width: 1),
-        ),
+        border: Border(bottom: BorderSide(color: cs.outline, width: 1)),
       ),
       child: Row(
         children: [
@@ -61,33 +61,44 @@ class _TopPanelState extends State<TopPanel> {
 
                   const SizedBox(width: 8),
 
-                 GestureDetector(
-                  child:  Container(
-                    height: 26,
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    decoration: BoxDecoration(
-                      color: cs.surface,
-                      borderRadius: BorderRadius.circular(4),
-                      border: Border.all(color: cs.outline, width: 1),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(BootstrapIcons.eject,
-                            size: 12, color: cs.onSurface),
-                        const SizedBox(width: 4),
-                        Text(
-                          "Load",
-                          style:
-                              TextStyle(color: cs.onSurface, fontSize: 12),
+                  GestureDetector(
+                    child: Opacity(
+                      opacity: widget.selectedModel == "Select Model" ? 0.3 : 1,
+                      child: Container(
+                        height: 26,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        decoration: BoxDecoration(
+                          color: widget.selectedModel == widget.loadedModel
+                              ? cs.surface
+                              : cs.primary,
+                          borderRadius: BorderRadius.circular(4),
+                          border: Border.all(color: cs.outline, width: 1),
                         ),
-                      ],
+                        child: Row(
+                          children: [
+                            Icon(
+                              BootstrapIcons.eject,
+                              size: 12,
+                              color: cs.onSurface,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              widget.selectedModel == widget.loadedModel
+                                  ? "Eject"
+                                  : "Load",
+                              style: TextStyle(
+                                color: cs.onSurface,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                    
+                    onTap: () {
+                      widget.onLoadModel();
+                    },
                   ),
-                  onTap:(){ 
-                    widget.onLoadModel();
-                  },
-                 )
                 ],
               ),
             ),
@@ -96,11 +107,7 @@ class _TopPanelState extends State<TopPanel> {
           IconButton(
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 28),
-            icon: Icon(
-              BootstrapIcons.gear,
-              size: 16,
-              color: cs.onSurface,
-            ),
+            icon: Icon(BootstrapIcons.gear, size: 16, color: cs.onSurface),
             onPressed: () {},
           ),
         ],

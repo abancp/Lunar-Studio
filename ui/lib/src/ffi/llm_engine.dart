@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:isolate';
 import 'package:flutter/cupertino.dart';
 
@@ -9,13 +10,14 @@ class LLMEngine {
   factory LLMEngine() => _i;
   static bool isModelLoaded = false;
   static bool modelLoading = false;
+  static String loadedModel = "";
   LLMEngine._internal();
 
   late SendPort _workerSend;
   bool _ready = false;
 
   Future<void> init(String libpath) async {
-    try{
+    try {
       debugPrint("[Engine] : C++ Lib initing..");
       final rp = ReceivePort();
       await Isolate.spawn(llmWorkerEntry, rp.sendPort, debugName: "LLMWorker");
@@ -42,7 +44,7 @@ class LLMEngine {
           throw Exception(msg["error"]);
         }
       }
-    }catch(e){
+    } catch (e) {
       debugPrint("Error while initing : $e");
     }
   }
@@ -64,7 +66,7 @@ class LLMEngine {
         'path': modelpath,
         'reply': replyPort.sendPort,
       });
-
+      //TODO : laodedModel = "" ; confusion :)
       await for (final msg in replyPort) {
         // print("[Engine] init message: $msg");
         if (msg["cmd"] == "ready") {
@@ -79,9 +81,10 @@ class LLMEngine {
         }
       }
       isModelLoaded = true;
+      loadedModel = modelpath.split(".").last.split(".").first;
     } catch (e) {
       debugPrint("Error while loading model : $e");
-    } finally{
+    } finally {
       modelLoading = false;
     }
   }
@@ -91,7 +94,9 @@ class LLMEngine {
     void Function(String tok) onToken,
   ) async {
     if (!_ready || !isModelLoaded || modelLoading) {
-      debugPrint("Engine Ready : $_ready \n isModelLoaded $isModelLoaded \n Model Loading : $modelLoading");
+      debugPrint(
+        "Engine Ready : $_ready \n isModelLoaded $isModelLoaded \n Model Loading : $modelLoading",
+      );
       throw StateError("Engine not ready");
     }
     // print("[Engine] generate() → $prompt");

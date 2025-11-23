@@ -18,9 +18,10 @@ class ChatPage extends StatefulWidget {
 }
 
 class _ChatPageState extends State<ChatPage> {
-  String selectedModel = "Qwen Selected";
+  String selectedModel = "Select Model";
   bool importing = false;
   bool engineReady = false;
+  String loadedModel = "";
 
   @override
   void initState() {
@@ -74,6 +75,9 @@ class _ChatPageState extends State<ChatPage> {
 
   Future<void> loadModel() async {
     try {
+      if (selectedModel == "" || selectedModel == "Select Model") {
+        return;
+      }
       final dir = await getApplicationSupportDirectory();
       final modelDir = Directory("${dir.path}/models");
 
@@ -89,6 +93,7 @@ class _ChatPageState extends State<ChatPage> {
       if (mounted) {
         setState(() {
           engineReady = true;
+          loadedModel = selectedModel;
           debugPrint("engine ready : $engineReady");
         });
       }
@@ -106,6 +111,7 @@ class _ChatPageState extends State<ChatPage> {
             selectedModel: selectedModel,
             onModelChange: updateModel,
             onLoadModel: loadModel,
+            loadedModel: loadedModel,
           ),
           Expanded(
             child: Row(
