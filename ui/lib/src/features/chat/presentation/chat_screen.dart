@@ -84,8 +84,8 @@ class _ChatPageState extends State<ChatPage> {
       final fileName = p.basename(selectedModel);
       final destination = File("${modelDir.path}/$fileName");
       debugPrint("Loading Model from :");
-      debugPrint(destination.toString());
-      await LLMEngine().load(destination.toString());
+      debugPrint(destination.path);
+      await LLMEngine().load(destination.path);
       if (mounted) {
         setState(() {
           engineReady = true;
