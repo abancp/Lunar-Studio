@@ -5,7 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:LunarStudio/src/ffi/llm_engine.dart';
 import 'package:flutter_highlight/flutter_highlight.dart';
+import 'package:flutter_highlight/themes/atom-one-dark.dart';
+import 'package:flutter_highlight/themes/mono-blue.dart';
 import 'package:flutter_highlight/themes/monokai-sublime.dart';
+import 'package:flutter_highlight/themes/vs2015.dart';
 
 enum ChunkType { plain, thinking, code, heading, bullet }
 
@@ -271,33 +274,60 @@ class _MainPanelState extends State<MainPanel> {
         });
   }
 
+  // Calculate responsive padding based on screen width
+  EdgeInsets _getResponsivePadding(double width) {
+    if (width < 600) {
+      // Mobile: minimal padding
+      return const EdgeInsets.symmetric(horizontal: 16, vertical: 20);
+    } else if (width < 900) {
+      // Tablet: moderate padding
+      return const EdgeInsets.symmetric(horizontal: 32, vertical: 24);
+    } else if (width < 1200) {
+      // Desktop small: comfortable padding
+      return const EdgeInsets.symmetric(horizontal: 80, vertical: 28);
+    } else if (width < 1600) {
+      // Desktop medium: larger padding
+      return const EdgeInsets.symmetric(horizontal: 150, vertical: 32);
+    } else {
+      // Desktop large: maximum padding
+      return const EdgeInsets.symmetric(horizontal: 280, vertical: 32);
+    }
+  }
+
+  // Calculate input bar padding to match chat
+  EdgeInsets _getInputBarPadding(double width) {
+    if (width < 600) {
+      return const EdgeInsets.fromLTRB(16, 12, 16, 16);
+    } else if (width < 900) {
+      return const EdgeInsets.fromLTRB(32, 14, 32, 18);
+    } else if (width < 1200) {
+      return const EdgeInsets.fromLTRB(80, 16, 80, 20);
+    } else if (width < 1600) {
+      return const EdgeInsets.fromLTRB(150, 16, 150, 20);
+    } else {
+      return const EdgeInsets.fromLTRB(280, 18, 280, 22);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final width = MediaQuery.of(context).size.width;
-    double hPad = 16;
-    double tPad = 10;
-    double bPad = 14;
-    if (width > 1600) {
-      hPad = 48;
-      bPad = 32;
-    } else if (width > 1200) {
-      hPad = 32;
-      bPad = 24;
-    }
+    final chatPadding = _getResponsivePadding(width);
+    final inputPadding = _getInputBarPadding(width);
 
     final TextStyle plainStyle = TextStyle(
       color: cs.onSurface,
-      fontSize: 14,
-      height: 1.5,
+      fontSize: width < 600 ? 14 : 15,
+      height: 1.6,
       letterSpacing: 0.2,
     );
 
     final TextStyle thinkingStyle = TextStyle(
       color: cs.onSurface.withOpacity(0.55),
       fontStyle: FontStyle.italic,
-      fontSize: 14,
-      height: 1.5,
+      fontSize: width < 600 ? 13 : 14,
+      height: 1.6,
     );
 
     return Container(
@@ -313,12 +343,19 @@ class _MainPanelState extends State<MainPanel> {
           Expanded(
             child: ListView.builder(
               controller: scrollController,
-              padding: const EdgeInsets.fromLTRB(200, 20, 200, 16),
+              padding: chatPadding,
               itemCount: messages.length,
               itemBuilder: (context, i) {
                 final msg = messages[i];
                 final bool isUser = msg.role == 'user';
-                final maxWidth = min(width * 0.9, 900);
+                
+                // Max width for bubbles (responsive)
+                final maxWidth = width < 600 
+                    ? width * 0.85 
+                    : width < 900 
+                        ? width * 0.8 
+                        : min(width * 0.75, 900.0);
+
                 return Align(
                   alignment: isUser
                       ? Alignment.centerRight
@@ -326,33 +363,35 @@ class _MainPanelState extends State<MainPanel> {
                   child: RepaintBoundary(
                     child: Container(
                       constraints: BoxConstraints(
-                        maxWidth: maxWidth.toDouble(),
+                        maxWidth: maxWidth,
                       ),
-                      margin: const EdgeInsets.symmetric(vertical: 6),
+                      margin: EdgeInsets.symmetric(
+                        vertical: width < 600 ? 6 : 8,
+                      ),
                       padding: EdgeInsets.zero,
                       child: DecoratedBox(
                         decoration: isUser
                             ? BoxDecoration(
-                                color: isUser
-                                    ? cs.primary.withOpacity(0.12)
-                                    : null,
-                                borderRadius: BorderRadius.circular(14),
+                                color: cs.primary.withOpacity(0.12),
+                                borderRadius: BorderRadius.circular(
+                                  width < 600 ? 12 : 16,
+                                ),
                                 border: Border.all(
                                   color: cs.outline.withOpacity(0.6),
                                 ),
                                 boxShadow: [
                                   BoxShadow(
                                     color: Colors.black.withOpacity(0.06),
-                                    blurRadius: 14,
-                                    offset: const Offset(0, 6),
+                                    blurRadius: width < 600 ? 10 : 14,
+                                    offset: Offset(0, width < 600 ? 4 : 6),
                                   ),
                                 ],
                               )
-                            : BoxDecoration(),
+                            : const BoxDecoration(),
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 10,
+                          padding: EdgeInsets.symmetric(
+                            horizontal: width < 600 ? 12 : 16,
+                            vertical: width < 600 ? 10 : 12,
                           ),
                           child: MessageBubble(
                             msg: msg,
@@ -378,9 +417,9 @@ class _MainPanelState extends State<MainPanel> {
               }
             },
             child: Container(
-              padding: EdgeInsets.fromLTRB(hPad, tPad, hPad, bPad),
+              padding: inputPadding,
               decoration: BoxDecoration(
-                color: cs.surface.withOpacity(0.85),
+                color: cs.surface.withOpacity(0.92),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.12),
@@ -392,13 +431,15 @@ class _MainPanelState extends State<MainPanel> {
               child: Column(
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
+                    padding: EdgeInsets.symmetric(
+                      horizontal: width < 600 ? 10 : 12,
+                      vertical: width < 600 ? 4 : 6,
                     ),
                     decoration: BoxDecoration(
                       color: cs.background.withOpacity(0.9),
-                      borderRadius: BorderRadius.circular(18),
+                      borderRadius: BorderRadius.circular(
+                        width < 600 ? 16 : 18,
+                      ),
                       border: Border.all(color: cs.outline, width: 1),
                     ),
                     child: Row(
@@ -410,7 +451,7 @@ class _MainPanelState extends State<MainPanel> {
                             controller: controller,
                             enabled: !isGenerating,
                             minLines: 1,
-                            maxLines: 8,
+                            maxLines: width < 600 ? 6 : 8,
                             keyboardType: TextInputType.multiline,
                             style: plainStyle,
                             decoration: InputDecoration(
@@ -422,19 +463,19 @@ class _MainPanelState extends State<MainPanel> {
                               ),
                               border: InputBorder.none,
                               isCollapsed: true,
-                              contentPadding: const EdgeInsets.symmetric(
-                                vertical: 8,
+                              contentPadding: EdgeInsets.symmetric(
+                                vertical: width < 600 ? 8 : 10,
                               ),
                             ),
                             onSubmitted: (_) => _onSubmit(),
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        SizedBox(width: width < 600 ? 6 : 8),
                         GestureDetector(
                           onTap: isGenerating ? null : _onSubmit,
                           child: Container(
-                            height: 36,
-                            width: 36,
+                            height: width < 600 ? 34 : 38,
+                            width: width < 600 ? 34 : 38,
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
                                 colors: [
@@ -444,7 +485,9 @@ class _MainPanelState extends State<MainPanel> {
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
                               ),
-                              borderRadius: BorderRadius.circular(10),
+                              borderRadius: BorderRadius.circular(
+                                width < 600 ? 8 : 10,
+                              ),
                               boxShadow: [
                                 if (!isGenerating)
                                   BoxShadow(
@@ -456,7 +499,7 @@ class _MainPanelState extends State<MainPanel> {
                             ),
                             child: Icon(
                               Icons.arrow_upward_rounded,
-                              size: 20,
+                              size: width < 600 ? 18 : 20,
                               color: cs.onPrimary,
                             ),
                           ),
@@ -464,14 +507,14 @@ class _MainPanelState extends State<MainPanel> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 6),
+                  SizedBox(height: width < 600 ? 6 : 8),
                   Align(
-                    alignment: Alignment.centerLeft,
+                    alignment: Alignment.bottomCenter,
                     child: Text(
                       'Responses from AI may be incorrect.',
                       style: TextStyle(
                         color: cs.onSurface.withOpacity(0.4),
-                        fontSize: 10,
+                        fontSize: width < 600 ? 9 : 10,
                       ),
                     ),
                   ),
@@ -709,33 +752,34 @@ class _ThinkingSectionState extends State<ThinkingSection>
           color: Colors.transparent,
           child: InkWell(
             onTap: widget.onToggle,
-            borderRadius: BorderRadius.circular(8),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _AnimatedThinkingLabel(
-                    colorScheme: cs,
-                    isThinkingActive: widget.isThinkingActive,
-                    thinkingDuration: widget.thinkingDuration,
-                  ),
-                  const SizedBox(width: 4),
-                  AnimatedBuilder(
-                    animation: _iconController,
-                    builder: (context, child) {
-                      return Transform.rotate(
-                        angle: _iconController.value * 3.14159,
-                        child: Icon(
-                          Icons.keyboard_arrow_down_rounded,
-                          size: 18,
-                          color: cs.primary.withOpacity(0.8),
-                        ),
-                      );
-                    },
-                  ),
-                ],
-              ),
+            hoverColor: Colors.transparent,
+            splashColor: Colors.transparent,
+            highlightColor: Colors.transparent,
+            focusColor: Colors.transparent,
+            mouseCursor: SystemMouseCursors.click,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _AnimatedThinkingLabel(
+                  colorScheme: cs,
+                  isThinkingActive: widget.isThinkingActive,
+                  thinkingDuration: widget.thinkingDuration,
+                ),
+                const SizedBox(width: 4),
+                AnimatedBuilder(
+                  animation: _iconController,
+                  builder: (context, child) {
+                    return Transform.rotate(
+                      angle: _iconController.value * 3.14159,
+                      child: Icon(
+                        Icons.keyboard_arrow_down_rounded,
+                        size: 18,
+                        color: cs.primary.withOpacity(0.8),
+                      ),
+                    );
+                  },
+                ),
+              ],
             ),
           ),
         ),
@@ -927,6 +971,13 @@ class _CodeBlockWidgetState extends State<CodeBlockWidget> {
     });
   }
 
+  final theme = {
+    ...vs2015Theme,
+    'root': (vs2015Theme['root'] as TextStyle).copyWith(
+      backgroundColor: Colors.transparent,
+    ),
+  };
+
   String _getDisplayLanguage() {
     final lang = widget.language.toLowerCase();
     final langMap = {
@@ -958,9 +1009,11 @@ class _CodeBlockWidgetState extends State<CodeBlockWidget> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final width = MediaQuery.of(context).size.width;
+    
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(width < 600 ? 10 : 12),
         border: Border.all(color: Colors.white.withOpacity(0.1), width: 1),
       ),
       clipBehavior: Clip.antiAlias,
@@ -969,7 +1022,10 @@ class _CodeBlockWidgetState extends State<CodeBlockWidget> {
         children: [
           // Header
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            padding: EdgeInsets.symmetric(
+              horizontal: width < 600 ? 12 : 14,
+              vertical: width < 600 ? 8 : 10,
+            ),
             decoration: BoxDecoration(
               color: const Color(0xFF1a1b26),
               border: Border(
@@ -983,15 +1039,15 @@ class _CodeBlockWidgetState extends State<CodeBlockWidget> {
               children: [
                 Icon(
                   Icons.code_rounded,
-                  size: 16,
+                  size: width < 600 ? 14 : 16,
                   color: Colors.white.withOpacity(0.6),
                 ),
-                const SizedBox(width: 8),
+                SizedBox(width: width < 600 ? 6 : 8),
                 Text(
                   _getDisplayLanguage(),
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.8),
-                    fontSize: 12,
+                    fontSize: width < 600 ? 11 : 12,
                     fontWeight: FontWeight.w600,
                     letterSpacing: 0.5,
                   ),
@@ -1003,9 +1059,9 @@ class _CodeBlockWidgetState extends State<CodeBlockWidget> {
                     onTap: _copyToClipboard,
                     borderRadius: BorderRadius.circular(6),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 5,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: width < 600 ? 8 : 10,
+                        vertical: width < 600 ? 4 : 5,
                       ),
                       decoration: BoxDecoration(
                         color: _copied
@@ -1025,19 +1081,19 @@ class _CodeBlockWidgetState extends State<CodeBlockWidget> {
                             _copied
                                 ? Icons.check_rounded
                                 : Icons.content_copy_rounded,
-                            size: 14,
+                            size: width < 600 ? 12 : 14,
                             color: _copied
                                 ? Colors.green.shade300
                                 : Colors.white.withOpacity(0.7),
                           ),
-                          const SizedBox(width: 6),
+                          SizedBox(width: width < 600 ? 4 : 6),
                           Text(
                             _copied ? 'Copied!' : 'Copy',
                             style: TextStyle(
                               color: _copied
                                   ? Colors.green.shade300
                                   : Colors.white.withOpacity(0.7),
-                              fontSize: 12,
+                              fontSize: width < 600 ? 11 : 12,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -1052,18 +1108,18 @@ class _CodeBlockWidgetState extends State<CodeBlockWidget> {
           // Code content with syntax highlighting
           Container(
             color: const Color(0xFF0d1117),
-            padding: const EdgeInsets.all(14),
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: HighlightView(
                 widget.code,
                 language: widget.language,
-                theme: monokaiSublimeTheme,
-                padding: EdgeInsets.zero,
-                textStyle: const TextStyle(
+                theme: theme,
+                padding: EdgeInsets.all(width < 600 ? 12 : 14),
+                textStyle: TextStyle(
                   fontFamily: 'monospace',
-                  fontSize: 13,
+                  fontSize: width < 600 ? 13 : 14,
                   height: 1.5,
+                  color: null,
                 ),
               ),
             ),
