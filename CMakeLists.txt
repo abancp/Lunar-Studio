@@ -53,32 +53,32 @@ qt_policy(SET QTP0001 NEW)
 # ============================================================
 # LunarStudio CLI Executable
 # ============================================================
-
-add_executable(LunarStudio
-    src/main.cpp
-    src/embed.cpp
-    src/search.cpp
-    src/model.cpp
-    src/utils/extract_search_query.cpp
-)
-
-target_include_directories(LunarStudio PRIVATE include)
-target_include_directories(LunarStudio PRIVATE include/utils)
-
-target_link_libraries(LunarStudio PRIVATE
-    llama
-    faiss
-    ggml
-    ggml-base
-    ${SQLite3_LIBRARIES}
-    ${OpenMP_CXX_LIBRARIES}
-    ${BLAS_LIBRARIES}
-    ${LAPACK_LIBRARIES}
-)
-
-target_compile_options(LunarStudio PRIVATE -O3 -march=native ${OpenMP_CXX_FLAGS})
-
-install(TARGETS LunarStudio DESTINATION bin)
+#
+#add_executable(LunarStudio
+#    src/main.cpp
+#    src/embed.cpp
+#    src/search.cpp
+#    src/model.cpp
+#    src/utils/extract_search_query.cpp
+#)
+#
+#target_include_directories(LunarStudio PRIVATE include)
+#target_include_directories(LunarStudio PRIVATE include/utils)
+#
+#target_link_libraries(LunarStudio PRIVATE
+#    llama
+#    faiss
+#    ggml
+#    ggml-base
+#    ${SQLite3_LIBRARIES}
+#    ${OpenMP_CXX_LIBRARIES}
+#    ${BLAS_LIBRARIES}
+#    ${LAPACK_LIBRARIES}
+#)
+#
+#target_compile_options(LunarStudio PRIVATE -O3 -march=native ${OpenMP_CXX_FLAGS})
+#
+#install(TARGETS LunarStudio DESTINATION bin)
 
 
 # ============================================================
@@ -91,6 +91,7 @@ add_library(lunarstudio SHARED
     src/search.cpp
     src/model.cpp
     src/utils/extract_search_query.cpp
+    src/utils/remove_think_blocks.cpp
 )
 
 target_include_directories(lunarstudio PUBLIC include)
@@ -179,6 +180,6 @@ install(TARGETS make_index DESTINATION bin)
 # ============================================================
 # ⚠️ Deprecation warnings from llama.cpp
 # ============================================================
-foreach(target LunarStudio make_index lunarstudio)
+foreach(target make_index lunarstudio)
     target_compile_options(${target} PRIVATE -Wno-deprecated-declarations)
 endforeach()
