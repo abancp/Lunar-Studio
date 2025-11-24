@@ -4,8 +4,14 @@ import 'package:LunarStudio/src/core/db/app_db.dart';
 class LeftPanel extends StatefulWidget {
   final List<Map<String, dynamic>> chats;
   final Future<void> Function() loadChats;
+  final void Function(int) laodMessages;
 
-  const LeftPanel({super.key, required this.chats, required this.loadChats});
+  const LeftPanel({
+    super.key,
+    required this.chats,
+    required this.loadChats,
+    required this.laodMessages,
+  });
 
   @override
   State<LeftPanel> createState() => _LeftPanelState();
@@ -62,15 +68,21 @@ class _LeftPanelState extends State<LeftPanel> {
                   chat['updated_at'] as int,
                 );
 
-                return Container(
-                  height: 48,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    chat['title'] ?? 'Untitled',
-                    style: TextStyle(color: cs.onSurface, fontSize: 14),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                return InkWell(
+                  onTap: () {
+                    debugPrint(chat['id'].toString());
+                    widget.laodMessages(chat['id'] as int);
+                  },
+                  child: Container(
+                    height: 48,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      chat['title'] ?? 'Untitled',
+                      style: TextStyle(color: cs.onSurface, fontSize: 14),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 );
               },

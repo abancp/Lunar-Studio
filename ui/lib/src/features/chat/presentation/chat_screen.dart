@@ -27,6 +27,7 @@ class _ChatPageState extends State<ChatPage> {
   bool showLeftPanel = true;
   int chatId = -1;
   List<Map<String, dynamic>> chats = [];
+  final mainPanelKey = GlobalKey<MainPanelState>();
 
   @override
   void initState() {
@@ -187,11 +188,20 @@ class _ChatPageState extends State<ChatPage> {
                 showLeftPanel
                     ? SizedBox(
                         width: 240, // side panel width
-                        child: LeftPanel(chats: chats, loadChats: loadChats),
+                        child: LeftPanel(
+                          chats: chats,
+                          loadChats: loadChats,
+                          laodMessages: (int id) {
+                            debugPrint("From parent");
+                            debugPrint(id.toString());
+                            mainPanelKey.currentState?.loadMessages(id);
+                          },
+                        ),
                       )
                     : SizedBox.shrink(),
                 Expanded(
                   child: MainPanel(
+                    key:mainPanelKey,
                     engineReady: engineReady,
                     chatId: chatId,
                     setChatId: setChatId,

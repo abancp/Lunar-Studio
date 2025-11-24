@@ -198,10 +198,10 @@ class MainPanel extends StatefulWidget {
   });
 
   @override
-  State<MainPanel> createState() => _MainPanelState();
+  State<MainPanel> createState() => MainPanelState();
 }
 
-class _MainPanelState extends State<MainPanel> {
+class MainPanelState extends State<MainPanel> {
   final TextEditingController controller = TextEditingController();
   final ScrollController scrollController = ScrollController();
   final FocusNode keyboardFocus = FocusNode();
@@ -227,6 +227,35 @@ class _MainPanelState extends State<MainPanel> {
       m.dispose();
     }
     super.dispose();
+  }
+
+  void loadMessages(int chatId) async {
+    debugPrint("From mainpanel");
+    debugPrint(chatId.toString());
+    final db = await AppDB.instance;
+
+    final rawMessages = await db.query(
+      'messages',
+      where: 'chat_id = ?',
+      whereArgs: [chatId],
+      orderBy: 'sequence ASC',
+    );
+
+    setState(() {
+      messages.clear();
+    });
+
+    for (final m in rawMessages) {
+      setState(() {
+        messages.add(
+          _ChatMessage.fromPlain(
+            role: m['role'].toString(),
+            plain: m['content'].toString(),
+          ),
+        );
+        widget.setChatId(chatId);
+      });
+    }
   }
 
   void _performScroll() {
@@ -294,6 +323,7 @@ class _MainPanelState extends State<MainPanel> {
             seq + 1,
             widget.setChatId,
           );
+          seq++;
           setState(() {
             isGenerating = false;
           });
