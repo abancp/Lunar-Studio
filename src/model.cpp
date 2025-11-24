@@ -5,6 +5,7 @@
 #include <string>
 #include <cstring>
 #include <thread>
+#include "utils/remove_think_blocks.hpp"
 
 static llama_model *g_model = nullptr;
 static llama_sampler *g_sampler = nullptr;
@@ -13,36 +14,6 @@ static llama_model_params g_model_params;
 static llama_context_params g_ctx_params;
 
 static std::vector<llama_chat_message> g_messages;
-
-void remove_think_blocks(std::string &s)
-{
-    const std::string start_tag = "<think>";
-    const std::string end_tag = "</think>";
-
-    while (true)
-    {
-        // find start
-        size_t s_pos = s.find(start_tag);
-        if (s_pos == std::string::npos)
-            break; // no more <think>
-
-        // find end
-        size_t e_pos = s.find(end_tag, s_pos);
-        if (e_pos == std::string::npos)
-        {
-            // malformed: remove everything from <think> to end
-            s.erase(s_pos);
-            break;
-        }
-
-        // remove <think> ... </think>
-        s.erase(s_pos, (e_pos + end_tag.length()) - s_pos);
-    }
-
-    // optional: trim leading whitespace/newlines after removal
-    while (!s.empty() && (s[0] == '\n' || s[0] == ' '))
-        s.erase(s.begin());
-}
 
 int load_model(const char *model_path)
 {
@@ -170,7 +141,7 @@ std::string run_model(std::string prompt,
         }
 
         if (cb)
-            cb(piece); // stream to Python
+            cb(piece);
         batch = llama_batch_get_one(&tok, 1);
     }
 
