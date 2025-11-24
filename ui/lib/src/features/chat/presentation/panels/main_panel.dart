@@ -230,8 +230,6 @@ class MainPanelState extends State<MainPanel> {
   }
 
   void loadMessages(int chatId) async {
-    debugPrint("From mainpanel");
-    debugPrint(chatId.toString());
     final db = await AppDB.instance;
 
     final rawMessages = await db.query(

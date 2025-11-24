@@ -111,7 +111,6 @@ class LLMEngine {
 
       if (cmd == "token" && msg["id"] == id) {
         res += msg["token"];
-        debugPrint(res);
         onToken(msg["token"]);
       }
 

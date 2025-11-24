@@ -77,7 +77,6 @@ class _ChatPageState extends State<ChatPage> {
           selectedModel = fileName;
         });
         importing = false;
-        print("Copied successfully");
       } on Exception catch (_) {
         if (!mounted) return;
         MotionToast.error(
@@ -192,8 +191,6 @@ class _ChatPageState extends State<ChatPage> {
                           chats: chats,
                           loadChats: loadChats,
                           laodMessages: (int id) {
-                            debugPrint("From parent");
-                            debugPrint(id.toString());
                             mainPanelKey.currentState?.loadMessages(id);
                           },
                         ),
