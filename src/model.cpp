@@ -4,6 +4,7 @@
 #include <vector>
 #include <string>
 #include <cstring>
+#include <thread>
 
 static llama_model *g_model = nullptr;
 static llama_sampler *g_sampler = nullptr;
@@ -67,6 +68,8 @@ int load_model(const char *model_path)
     g_ctx_params = llama_context_default_params();
     g_ctx_params.n_ctx = 2048;
     g_ctx_params.n_batch = 2048;
+    g_ctx_params.n_threads = std::thread::hardware_concurrency();
+    g_ctx_params.n_threads_batch = std::thread::hardware_concurrency();
 
     g_sampler = llama_sampler_chain_init(llama_sampler_chain_default_params());
     llama_sampler_chain_add(g_sampler, llama_sampler_init_min_p(0.05f, 1));
