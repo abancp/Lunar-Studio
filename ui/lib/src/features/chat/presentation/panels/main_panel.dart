@@ -180,39 +180,13 @@ void _splitPlainIntoLines(String text, List<_Chunk> chunks) {
   }
 }
 
-void addMessageToChat(
-  String content,
-  int chatId,
-  String role,
-  int seq,
-  void Function(int) setChatId,
-) async {
-  final db = await AppDB.instance;
-  final now = DateTime.now().millisecondsSinceEpoch;
-  int id = chatId;
-  if (chatId == -1) {
-    id = await db.insert('chats', {
-      'title': 'New Chat',
-      'created_at': now,
-      'updated_at': now,
-    });
-    setChatId(id);
-  }
-
-  await db.insert('messages', {
-    'chat_id': id,
-    'role': role,
-    'content': content,
-    'sequence': seq,
-    'created_at': now,
-  });
-}
-
 class MainPanel extends StatefulWidget {
   final bool engineReady;
   final int chatId;
   final void Function(int) setChatId;
   final String loadedModel;
+  final void Function(String, int, String, int, void Function(int))
+  addMessageToChat;
 
   const MainPanel({
     super.key,
@@ -220,6 +194,7 @@ class MainPanel extends StatefulWidget {
     required this.chatId,
     required this.setChatId,
     required this.loadedModel,
+    required this.addMessageToChat,
   });
 
   @override
@@ -280,7 +255,13 @@ class _MainPanelState extends State<MainPanel> {
       messages.add(_ChatMessage.fromPlain(role: 'user', plain: text));
       isGenerating = true;
     });
-    addMessageToChat(text, widget.chatId, "user", seq + 1, widget.setChatId);
+    widget.addMessageToChat(
+      text,
+      widget.chatId,
+      "user",
+      seq + 1,
+      widget.setChatId,
+    );
     seq++;
     controller.clear();
     _performScroll();
@@ -306,7 +287,7 @@ class _MainPanelState extends State<MainPanel> {
         })
         .then((res) {
           if (!mounted) return;
-          addMessageToChat(
+          widget.addMessageToChat(
             res,
             widget.chatId,
             'assistant',

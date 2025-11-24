@@ -2,30 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:LunarStudio/src/core/db/app_db.dart';
 
 class LeftPanel extends StatefulWidget {
-  const LeftPanel({super.key});
+  final List<Map<String, dynamic>> chats;
+  final Future<void> Function() loadChats;
+
+  const LeftPanel({super.key, required this.chats, required this.loadChats});
 
   @override
   State<LeftPanel> createState() => _LeftPanelState();
 }
 
 class _LeftPanelState extends State<LeftPanel> {
-  List<Map<String, dynamic>> chats = [];
-
   @override
   void initState() {
     super.initState();
-    loadChats();
-  }
-
-  Future<void> loadChats() async {
-    final db = await AppDB.instance;
-
-    final data = await db.query(
-      'chats',
-      orderBy: 'updated_at DESC', 
-    );
-
-    setState(() => chats = data);
+    widget.loadChats();
   }
 
   Future<void> newChat() async {
@@ -38,7 +28,7 @@ class _LeftPanelState extends State<LeftPanel> {
       'updated_at': now,
     });
 
-    loadChats();
+    widget.loadChats();
   }
 
   @override
@@ -49,9 +39,7 @@ class _LeftPanelState extends State<LeftPanel> {
       width: 240,
       decoration: BoxDecoration(
         color: cs.surface,
-        border: Border(
-          right: BorderSide(color: cs.outline, width: 1),
-        ),
+        border: Border(right: BorderSide(color: cs.outline, width: 1)),
       ),
       child: Column(
         children: [
@@ -66,9 +54,9 @@ class _LeftPanelState extends State<LeftPanel> {
           Expanded(
             child: ListView.builder(
               padding: EdgeInsets.zero,
-              itemCount: chats.length,
+              itemCount: widget.chats.length,
               itemBuilder: (ctx, i) {
-                final chat = chats[i];
+                final chat = widget.chats[i];
 
                 final updated = DateTime.fromMillisecondsSinceEpoch(
                   chat['updated_at'] as int,
@@ -80,17 +68,14 @@ class _LeftPanelState extends State<LeftPanel> {
                   alignment: Alignment.centerLeft,
                   child: Text(
                     chat['title'] ?? 'Untitled',
-                    style: TextStyle(
-                      color: cs.onSurface,
-                      fontSize: 14,
-                    ),
+                    style: TextStyle(color: cs.onSurface, fontSize: 14),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                 );
               },
             ),
-          )
+          ),
         ],
       ),
     );

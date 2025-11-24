@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:LunarStudio/src/core/db/app_db.dart';
 import 'package:LunarStudio/src/features/chat/presentation/panels/left_panel.dart';
 import 'package:LunarStudio/src/features/chat/presentation/panels/main_panel.dart';
 import 'package:LunarStudio/src/features/chat/presentation/panels/top_panel.dart';
@@ -25,6 +26,7 @@ class _ChatPageState extends State<ChatPage> {
   String loadedModel = "";
   bool showLeftPanel = true;
   int chatId = -1;
+  List<Map<String, dynamic>> chats = [];
 
   @override
   void initState() {
@@ -127,6 +129,46 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
+  Future<void> loadChats() async {
+    final db = await AppDB.instance;
+
+    final data = await db.query('chats', orderBy: 'updated_at DESC');
+
+    setState(() => chats = data);
+  }
+
+  void addMessageToChat(
+    String content,
+    int chatId,
+    String role,
+    int seq,
+    void Function(int) setChatId,
+  ) async {
+    final db = await AppDB.instance;
+    final now = DateTime.now().millisecondsSinceEpoch;
+    int id = chatId;
+    if (chatId == -1) {
+      id = await db.insert('chats', {
+        'title': content.substring(
+          0,
+          content.length > 10 ? 10 : content.length,
+        ),
+        'created_at': now,
+        'updated_at': now,
+      });
+      setChatId(id);
+      loadChats();
+    }
+
+    await db.insert('messages', {
+      'chat_id': id,
+      'role': role,
+      'content': content,
+      'sequence': seq,
+      'created_at': now,
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -145,7 +187,7 @@ class _ChatPageState extends State<ChatPage> {
                 showLeftPanel
                     ? SizedBox(
                         width: 240, // side panel width
-                        child: LeftPanel(),
+                        child: LeftPanel(chats: chats, loadChats: loadChats),
                       )
                     : SizedBox.shrink(),
                 Expanded(
@@ -154,6 +196,7 @@ class _ChatPageState extends State<ChatPage> {
                     chatId: chatId,
                     setChatId: setChatId,
                     loadedModel: loadedModel,
+                    addMessageToChat: addMessageToChat,
                   ),
                 ),
               ],
