@@ -119,7 +119,7 @@ class _LeftPanelState extends State<LeftPanel>
         color: cs.surface,
         border: Border(
           right: BorderSide(
-            color: cs.outlineVariant.withOpacity(0.5),
+            color: cs.outline,
             width: 1,
           ),
         ),

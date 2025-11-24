@@ -243,6 +243,7 @@ class MainPanelState extends State<MainPanel> {
       messages.clear();
     });
 
+    widget.setChatId(chatId);
     for (final m in rawMessages) {
       setState(() {
         messages.add(
@@ -251,7 +252,6 @@ class MainPanelState extends State<MainPanel> {
             plain: m['content'].toString(),
           ),
         );
-        widget.setChatId(chatId);
       });
     }
   }
