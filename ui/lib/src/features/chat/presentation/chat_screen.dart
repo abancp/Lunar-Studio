@@ -9,6 +9,7 @@ import 'package:flutter/rendering.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:LunarStudio/src/ffi/llm_engine.dart';
+import 'package:motion_toast/motion_toast.dart';
 
 class ChatPage extends StatefulWidget {
   const ChatPage({super.key});
@@ -75,8 +76,11 @@ class _ChatPageState extends State<ChatPage> {
         importing = false;
         print("Copied successfully");
       } on Exception catch (_) {
-        //TODO : Error toaster
-        print("Error : Can't import model ");
+        if (!mounted) return;
+        MotionToast.error(
+          description: Text("Can't Import Model"),
+        ).show(context);
+        debugPrint("Error : Can't import model ");
       } finally {
         importing = false;
       }
@@ -90,6 +94,9 @@ class _ChatPageState extends State<ChatPage> {
   Future<void> loadModel() async {
     try {
       if (selectedModel == "" || selectedModel == "Select Model") {
+        MotionToast.info(
+          description: Text("Select Model to Load"),
+        ).show(context);
         return;
       }
       final dir = await getApplicationSupportDirectory();
@@ -105,6 +112,9 @@ class _ChatPageState extends State<ChatPage> {
       debugPrint(destination.path);
       await LLMEngine().load(destination.path);
       if (mounted) {
+        MotionToast.success(
+          description: Text("Model Loaded Successfully!"),
+        ).show(context);
         setState(() {
           engineReady = true;
           loadedModel = selectedModel;
@@ -112,6 +122,7 @@ class _ChatPageState extends State<ChatPage> {
         });
       }
     } catch (e) {
+      //TODO : toast for evry error
       debugPrint('❌ Engine error: $e');
     }
   }
@@ -142,6 +153,7 @@ class _ChatPageState extends State<ChatPage> {
                     engineReady: engineReady,
                     chatId: chatId,
                     setChatId: setChatId,
+                    loadedModel: loadedModel,
                   ),
                 ),
               ],

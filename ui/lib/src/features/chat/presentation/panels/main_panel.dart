@@ -6,11 +6,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:LunarStudio/src/ffi/llm_engine.dart';
 import 'package:flutter_highlight/flutter_highlight.dart';
-import 'package:flutter_highlight/themes/atom-one-dark.dart';
-import 'package:flutter_highlight/themes/mono-blue.dart';
-import 'package:flutter_highlight/themes/monokai-sublime.dart';
 import 'package:flutter_highlight/themes/vs2015.dart';
-import 'package:path/path.dart';
+import 'package:motion_toast/motion_toast.dart';
+import 'package:path/path.dart' as p;
 
 enum ChunkType { plain, thinking, code, heading, bullet }
 
@@ -214,12 +212,14 @@ class MainPanel extends StatefulWidget {
   final bool engineReady;
   final int chatId;
   final void Function(int) setChatId;
+  final String loadedModel;
 
   const MainPanel({
     super.key,
     required this.engineReady,
     required this.chatId,
     required this.setChatId,
+    required this.loadedModel,
   });
 
   @override
@@ -268,6 +268,11 @@ class _MainPanelState extends State<MainPanel> {
   }
 
   void _onSubmit() {
+    if (widget.loadedModel == "") {
+      if (!mounted) return;
+      MotionToast.info(description: Text("Load a Model")).show(context);
+      return;
+    }
     if (!engineReady || isGenerating) return;
     final text = controller.text.trim();
     if (text.isEmpty) return;

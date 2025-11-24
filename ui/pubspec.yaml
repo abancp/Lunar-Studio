@@ -41,6 +41,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   file_picker: ^10.3.7
   flutter_highlight: ^0.7.0
+  motion_toast: ^2.6.9
   
 
 dev_dependencies:
