@@ -1,4 +1,5 @@
 #include <string>
+#include "utils/remove_think_blocks.hpp"
 
 void remove_think_blocks(std::string &s)
 {
