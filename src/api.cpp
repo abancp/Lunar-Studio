@@ -3,22 +3,29 @@
 #include <string>
 #include <iostream>
 
+#include "embed.hpp"
+#include "search.hpp"
+#include "utils/extract_search_query.hpp"
 #include "model.hpp"
 #include "api.h"
 
 extern "C"
 {
-    // Adjust this if needed
-    // const char *model_path = "/home/abancp/Projects/localGPT1.0/models/Qwen3-0.6B-Q4_K_M.gguf";
-
-    void load_llm(const char* model_path)
+    const std::string embed_model_path = "/home/abancp/Projects/Lunar-Studio/models/all-MiniLM-L6-v2.F16.gguf";
+    const std::string db_path = "/home/abancp/Projects/Lunar-Studio/ic/cs/mapping.db";
+    const std::string index_path = "/home/abancp/Projects/Lunar-Studio/ic/cs/cpp_index_ivf.index";
+    
+    void load_llm(const char *model_path)
     {
+        std::cout << "[API] Loading LLM from: " << model_path << std::endl;
         load_model(model_path);
+        std::cout << "[API] LLM loaded successfully" << std::endl;
     }
 
     void generate(const char *prompt, C_TokenCallback cb)
     {
-        std::cout << "[C++] Starting generation..." << std::endl;
+        std::cout << "\n[API] ========== NEW GENERATION REQUEST ==========\n";
+        std::cout << "[API] User prompt: " << std::string(prompt).substr(0, 100) << "...\n";
 
         // -------- Safe C++ → C callback bridge --------
         TokenCallback cpp_cb = nullptr;
@@ -27,20 +34,99 @@ extern "C"
         {
             cpp_cb = [cb](const std::string &tok)
             {
-                char *copy = strdup(tok.c_str()); // safe heap buffer
-                cb(copy);                         // call Python/Flutter
-                free(copy);                       // release after callback
+                char *copy = strdup(tok.c_str());
+                cb(copy);
+                free(copy);
             };
         }
 
-        // Convert prompt safely
-        std::string prompt_cpp(prompt);
+        // Store the original prompt - we'll need it later
+        std::string original_prompt(prompt);
 
-        std::cout << "[C++] Calling run_model..." << std::endl;
+        // -------- PHASE 1: Ask model to decide if search is needed --------
+        std::cout << "[API] Phase 1: Checking if search is needed...\n";
+        
+        // Pass original_prompt to run_model in search decision phase
+        std::string decision_response = run_model(
+            original_prompt,  // The user's original question
+            true,             // allowSearch = true
+            {},               // No search results yet
+            nullptr           // No callback for decision phase
+        );
+        
+        // Check if model wants to search
+        bool needs_search = (decision_response.find("search(") != std::string::npos);
+        
+        std::cout << "[API] Search needed: " << (needs_search ? "YES" : "NO") << "\n";
 
-        // -------- Call your LLM engine --------
-        run_model(prompt_cpp, true, {}, cpp_cb);
+        if (needs_search)
+        {
+            // -------- PHASE 2: Extract search query and perform search --------
+            std::cout << "[API] Phase 2: Extracting search query...\n";
+            
+            std::string search_query = extract_search_query(decision_response);
+            std::cout << "[API] Search query: \"" << search_query << "\"\n";
+            
+            if (search_query.empty())
+            {
+                std::cerr << "[API] ERROR: Failed to extract search query\n";
+                if (cpp_cb)
+                {
+                    cpp_cb("I apologize, but I encountered an error processing your search request. Please try rephrasing your question.");
+                }
+                return;
+            }
 
-        std::cout << "[C++] Generation complete" << std::endl;
+            // Perform embedding and search
+            std::cout << "[API] Generating embedding...\n";
+            std::vector<float> query_embed = embed(search_query, embed_model_path.c_str());
+            
+            std::cout << "[API] Searching database...\n";
+            std::vector<std::string> results = search(query_embed, db_path, index_path);
+            
+            std::cout << "[API] Retrieved " << results.size() << " results:\n";
+            for (size_t i = 0; i < results.size() && i < 3; i++)
+            {
+                std::cout << "  [" << i + 1 << "] " 
+                          << results[i].substr(0, 100) << "...\n";
+            }
+
+            // Ensure we have at least 3 results (pad with empty if needed)
+            while (results.size() < 3)
+            {
+                results.push_back("[No additional information available]");
+            }
+
+            // -------- PHASE 3: Generate answer using search results --------
+            std::cout << "[API] Phase 3: Generating answer with search results...\n";
+            
+            // CRITICAL: Pass the ORIGINAL user prompt, not the decision response
+            // This is why we saved original_prompt at the start
+            std::string final_response = run_model(
+                original_prompt, // User's ORIGINAL question: "what is RAM?"
+                false,           // allowSearch = false (don't search again)
+                results,         // The 3 search results
+                cpp_cb           // Stream tokens to user
+            );
+            
+            std::cout << "[API] Final response generated (" << final_response.size() << " chars)\n";
+        }
+        else
+        {
+            // -------- No search needed: Direct response --------
+            std::cout << "[API] Providing direct response (no search needed)\n";
+            
+            // The decision_response IS the answer, stream it if callback exists
+            if (cpp_cb)
+            {
+                // Stream the response token by token
+                for (char c : decision_response)
+                {
+                    cpp_cb(std::string(1, c));
+                }
+            }
+        }
+
+        std::cout << "[API] ========== GENERATION COMPLETE ==========\n\n";
     }
 }

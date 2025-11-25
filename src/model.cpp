@@ -20,6 +20,18 @@ static int g_cached_tokens = 0;
 // Track prompt tokens separately to detect mismatches
 static std::vector<llama_token> g_cached_prompt_tokens;
 
+// STABLE system prompt that NEVER changes
+static const char *STABLE_SYSTEM_PROMPT = R"SYS(You are LunarStudio, created by Aban Muhammed (AI Researcher & Engineer).
+
+You are a helpful AI assistant capable of answering questions and searching for information when needed.
+
+When you need to search for information, use: search("query")
+- Keep queries short and focused (2-5 words)
+- Use noun phrases, not questions
+- Example: "transformer neural networks" not "what are transformers?"
+
+Always provide clear, accurate, and helpful responses.)SYS";
+
 int load_model(const char *model_path)
 {
     llama_log_set(
@@ -57,6 +69,9 @@ int load_model(const char *model_path)
     g_cached_tokens = 0;
     g_cached_prompt_tokens.clear();
 
+    // Initialize with stable system prompt
+    g_messages.push_back({"system", STABLE_SYSTEM_PROMPT});
+
     std::cout << "[DEBUG] Model loaded successfully\n";
 
     return 0;
@@ -69,7 +84,7 @@ static std::string build_prompt_from_history()
     if (!tmpl)
         throw std::runtime_error("Chat template missing");
 
-    std::vector<char> out(4096);
+    std::vector<char> out(8192);
 
     int n = llama_chat_apply_template(
         tmpl,
@@ -81,7 +96,7 @@ static std::string build_prompt_from_history()
 
     if (n > (int)out.size())
     {
-        out.resize(n);
+        out.resize(n + 1024);
         n = llama_chat_apply_template(
             tmpl, g_messages.data(), g_messages.size(),
             true,
@@ -94,15 +109,78 @@ static std::string build_prompt_from_history()
     return std::string(out.data(), n);
 }
 
-std::string run_model(std::string prompt,
-                      bool,
-                      std::vector<std::string>,
-                      TokenCallback cb)
+// Helper: Build search decision instruction
+static std::string build_search_instruction(const std::string &user_prompt)
+{
+    return R"(Analyze the following message and decide if you need to search for information.
+
+MESSAGE CLASSIFICATION:
+- CASUAL/SOCIAL: Greetings, small talk, acknowledgments → Respond directly, NO search
+- INFORMATION REQUEST: Questions about facts, concepts, explanations → Use search()
+
+Examples:
+❌ "hi" → Respond with greeting
+❌ "thank you" → Acknowledge
+❌ "how are you" → Respond socially
+✅ "what is RAM" → search("ram memory")
+✅ "explain transformers" → search("transformer neural networks")
+
+User message: )" + user_prompt;
+}
+
+// Helper: Build answering instruction with search results
+static std::string build_answer_instruction(
+    const std::string &original_question,
+    const std::vector<std::string> &search_results)
+{
+    std::string instruction = R"(Answer the user's question using ONLY the provided search results below.
+
+INSTRUCTIONS:
+- Use only information from SEARCH RESULTS
+- Synthesize information clearly and concisely
+- If results don't contain the answer, say so
+- Do NOT call search() again
+- Cite relevant result numbers when appropriate
+
+USER'S QUESTION:
+)" + original_question + "\n\nSEARCH RESULTS:\n";
+
+    for (size_t i = 0; i < search_results.size(); i++)
+    {
+        instruction += "[" + std::to_string(i + 1) + "] " + search_results[i] + "\n\n";
+    }
+
+    instruction += "\nProvide a comprehensive answer based on these search results.";
+
+    return instruction;
+}
+
+std::string run_model(
+    std::string prompt,
+    bool allowSearch,
+    std::vector<std::string> search_results,
+    TokenCallback cb)
 {
     std::cout << "[DEBUG] ========== NEW TURN ==========\n";
-    std::cout << "[DEBUG] User prompt: " << prompt.substr(0, 100) << "...\n";
+    std::cout << "[DEBUG] Mode: " << (allowSearch ? "SEARCH_DECISION" : "ANSWER_WITH_RESULTS") << "\n";
+    std::cout << "[DEBUG] Prompt: " << prompt.substr(0, 100) << "...\n";
 
-    g_messages.push_back({"user", strdup(prompt.c_str())});
+    // Build the appropriate user message based on mode
+    std::string user_message;
+    if (allowSearch)
+    {
+        // Phase 1: Ask model to classify and decide
+        user_message = build_search_instruction(prompt);
+    }
+    else
+    {
+        // Phase 2: Provide search results and ask for answer
+        user_message = build_answer_instruction(prompt, search_results);
+    }
+
+    // Add user message to history
+    g_messages.push_back({"user", strdup(user_message.c_str())});
+    
     std::cout << "[DEBUG] Total messages in history: " << g_messages.size() << "\n";
 
     std::string final_prompt = build_prompt_from_history();
@@ -128,13 +206,13 @@ std::string run_model(std::string prompt,
     llama_tokenize(g_vocab, final_prompt.c_str(), final_prompt.size(),
                    toks.data(), toks.size(), is_first, true);
 
-    std::cout << "[DEBUG] Total tokens: " << toks.size() 
+    std::cout << "[DEBUG] Total tokens: " << toks.size()
               << ", Cached: " << g_cached_tokens << "\n";
 
-    // CRITICAL FIX: Check if prompt tokens match cached tokens
-    bool cache_valid = (g_cached_tokens > 0 && 
+    // Cache validation
+    bool cache_valid = (g_cached_tokens > 0 &&
                         g_cached_tokens <= (int)toks.size());
-    
+
     if (cache_valid)
     {
         // Verify the cached portion matches
@@ -142,8 +220,8 @@ std::string run_model(std::string prompt,
         {
             if (toks[i] != g_cached_prompt_tokens[i])
             {
-                std::cout << "[WARNING] Token mismatch at position " << i 
-                          << ". Cache invalid (think blocks were removed).\n";
+                std::cout << "[WARNING] Token mismatch at position " << i
+                          << ". Invalidating cache.\n";
                 cache_valid = false;
                 break;
             }
@@ -151,9 +229,9 @@ std::string run_model(std::string prompt,
     }
     else if (g_cached_tokens > (int)toks.size())
     {
-        std::cout << "[WARNING] Cache tokens (" << g_cached_tokens 
-                  << ") > actual tokens (" << toks.size() 
-                  << "). Think blocks were removed.\n";
+        std::cout << "[WARNING] Cache tokens (" << g_cached_tokens
+                  << ") > actual tokens (" << toks.size()
+                  << "). Invalidating cache.\n";
         cache_valid = false;
     }
 
@@ -162,27 +240,26 @@ std::string run_model(std::string prompt,
         std::cout << "[DEBUG] Recreating context and reprocessing all tokens...\n";
         llama_free(g_ctx);
         g_ctx = llama_init_from_model(g_model, g_ctx_params);
+        llama_sampler_reset(g_sampler);
         g_cached_tokens = 0;
         g_cached_prompt_tokens.clear();
     }
 
-    // OPTIMIZATION: Only process NEW tokens (skip already cached ones)
+    // OPTIMIZATION: Only process NEW tokens
     int tokens_to_process = toks.size() - g_cached_tokens;
-    
+
     std::cout << "[DEBUG] Tokens to process: " << tokens_to_process << "\n";
 
     if (tokens_to_process > 0)
     {
         std::cout << "[DEBUG] Processing " << tokens_to_process << " new tokens...\n";
-        
+
         // Create batch with only the new tokens
         llama_batch batch = llama_batch_get_one(
-            toks.data() + g_cached_tokens, 
-            tokens_to_process
-        );
+            toks.data() + g_cached_tokens,
+            tokens_to_process);
 
         std::cout << "[DEBUG] Decoding batch...\n";
-        // Decode the new tokens into KV cache
         if (llama_decode(g_ctx, batch) != 0)
         {
             std::cerr << "[ERROR] Failed to decode batch\n";
@@ -191,7 +268,7 @@ std::string run_model(std::string prompt,
 
         // Update cached token count
         g_cached_tokens = toks.size();
-        g_cached_prompt_tokens = toks; // Store for validation next turn
+        g_cached_prompt_tokens = toks;
         std::cout << "[DEBUG] Cache updated. New cached_tokens: " << g_cached_tokens << "\n";
     }
     else
@@ -199,15 +276,12 @@ std::string run_model(std::string prompt,
         std::cout << "[DEBUG] All tokens already cached, skipping prefill\n";
     }
 
-    std::string response;
-    std::string raw_response; // Store WITH think blocks
+    std::string raw_response;
     int generated_tokens = 0;
     std::cout << "[DEBUG] Starting generation...\n";
 
-    // Generation loop
     while (true)
     {
-        // Sample next token
         llama_token tok = llama_sampler_sample(g_sampler, g_ctx, -1);
 
         char buf[256];
@@ -219,7 +293,7 @@ std::string run_model(std::string prompt,
         }
 
         std::string piece(buf, n);
-        raw_response += piece; // Keep original WITH think blocks
+        raw_response += piece;
         generated_tokens++;
 
         if (llama_vocab_is_eog(g_vocab, tok))
@@ -228,8 +302,15 @@ std::string run_model(std::string prompt,
             break;
         }
 
+        // Stream tokens to callback (skip if searching)
         if (cb)
-            cb(piece);
+        {
+            bool is_search_call = (allowSearch && raw_response.find("search(") != std::string::npos);
+            if (!is_search_call)
+            {
+                cb(piece);
+            }
+        }
 
         // Decode the sampled token
         llama_batch batch = llama_batch_get_one(&tok, 1);
@@ -244,21 +325,19 @@ std::string run_model(std::string prompt,
 
     std::cout << "[DEBUG] Generated " << generated_tokens << " tokens\n";
     std::cout << "[DEBUG] Total cached tokens after generation: " << g_cached_tokens << "\n";
-    std::cout << "[DEBUG] Raw response length (with <think>): " << raw_response.size() << " chars\n";
+    std::cout << "[DEBUG] Raw response length: " << raw_response.size() << " chars\n";
 
-    // Store raw response for history (WITH think blocks for accurate cache)
-    // g_last_raw_response = raw_response;
+    // Store RAW response (with think blocks) for cache consistency
+    std::string response_for_history = raw_response;
     
-    // For display, remove think blocks
-    response = raw_response;
-    remove_think_blocks(response);
-    std::cout << "[DEBUG] Cleaned response length (without <think>): " << response.size() << " chars\n";
+    // Clean for display
+    remove_think_blocks(raw_response);
+    std::cout << "[DEBUG] Cleaned response length: " << raw_response.size() << " chars\n";
 
-    // CRITICAL: Store the RAW response in message history (with think blocks)
-    // so that the next turn's prompt matches what's in the KV cache
-    g_messages.push_back({"assistant", strdup(raw_response.c_str())});
-    
+    // Add to message history (raw version for cache consistency)
+    g_messages.push_back({"assistant", strdup(response_for_history.c_str())});
+
     std::cout << "[DEBUG] ========== TURN END ==========\n\n";
 
-    return response; // Return cleaned version to user
+    return raw_response;
 }
