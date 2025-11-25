@@ -69,7 +69,7 @@ extern "C"
             // -------- PHASE 2: Extract search query and perform search --------
             std::cout << "[API] Phase 2: Extracting search query...\n";
 
-            std::string search_query = extract_search_query(decision_response);
+            std::string search_query = extract_search_query(decision_response_lower);
             std::cout << "[API] Search query: \"" << search_query << "\"\n";
 
             if (search_query.empty())
