@@ -2,6 +2,7 @@
 #include <cstdlib>
 #include <string>
 #include <iostream>
+#include <algorithm>
 
 #include "embed.hpp"
 #include "search.hpp"
@@ -14,7 +15,7 @@ extern "C"
     const std::string embed_model_path = "/home/abancp/Projects/Lunar-Studio/models/all-MiniLM-L6-v2.F16.gguf";
     const std::string db_path = "/home/abancp/Projects/Lunar-Studio/ic/cs/mapping.db";
     const std::string index_path = "/home/abancp/Projects/Lunar-Studio/ic/cs/cpp_index_ivf.index";
-    
+
     void load_llm(const char *model_path)
     {
         std::cout << "[API] Loading LLM from: " << model_path << std::endl;
@@ -45,28 +46,32 @@ extern "C"
 
         // -------- PHASE 1: Ask model to decide if search is needed --------
         std::cout << "[API] Phase 1: Checking if search is needed...\n";
-        
+
         // Pass original_prompt to run_model in search decision phase
         std::string decision_response = run_model(
-            original_prompt,  // The user's original question
-            true,             // allowSearch = true
-            {},               // No search results yet
-            nullptr           // No callback for decision phase
+            original_prompt, // The user's original question
+            true,            // allowSearch = true
+            {},              // No search results yet
+            nullptr          // No callback for decision phase
         );
-        
+
         // Check if model wants to search
-        bool needs_search = (decision_response.find("search(") != std::string::npos);
-        
+        std::string decision_response_lower = strdup(decision_response.c_str());
+        std::transform(decision_response_lower.begin(), decision_response_lower.end(), decision_response_lower.begin(),
+                       [](unsigned char c)
+                       { return std::tolower(c); });
+        bool needs_search = (decision_response_lower.find("search(") != std::string::npos);
+
         std::cout << "[API] Search needed: " << (needs_search ? "YES" : "NO") << "\n";
 
         if (needs_search)
         {
             // -------- PHASE 2: Extract search query and perform search --------
             std::cout << "[API] Phase 2: Extracting search query...\n";
-            
+
             std::string search_query = extract_search_query(decision_response);
             std::cout << "[API] Search query: \"" << search_query << "\"\n";
-            
+
             if (search_query.empty())
             {
                 std::cerr << "[API] ERROR: Failed to extract search query\n";
@@ -80,14 +85,14 @@ extern "C"
             // Perform embedding and search
             std::cout << "[API] Generating embedding...\n";
             std::vector<float> query_embed = embed(search_query, embed_model_path.c_str());
-            
+
             std::cout << "[API] Searching database...\n";
             std::vector<std::string> results = search(query_embed, db_path, index_path);
-            
+
             std::cout << "[API] Retrieved " << results.size() << " results:\n";
             for (size_t i = 0; i < results.size() && i < 3; i++)
             {
-                std::cout << "  [" << i + 1 << "] " 
+                std::cout << "  [" << i + 1 << "] "
                           << results[i].substr(0, 100) << "...\n";
             }
 
@@ -99,7 +104,7 @@ extern "C"
 
             // -------- PHASE 3: Generate answer using search results --------
             std::cout << "[API] Phase 3: Generating answer with search results...\n";
-            
+
             // CRITICAL: Pass the ORIGINAL user prompt, not the decision response
             // This is why we saved original_prompt at the start
             std::string final_response = run_model(
@@ -108,14 +113,14 @@ extern "C"
                 results,         // The 3 search results
                 cpp_cb           // Stream tokens to user
             );
-            
+
             std::cout << "[API] Final response generated (" << final_response.size() << " chars)\n";
         }
         else
         {
             // -------- No search needed: Direct response --------
             std::cout << "[API] Providing direct response (no search needed)\n";
-            
+
             // The decision_response IS the answer, stream it if callback exists
             if (cpp_cb)
             {
