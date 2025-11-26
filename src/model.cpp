@@ -84,7 +84,7 @@ static std::string build_prompt_from_history()
     if (!tmpl)
         throw std::runtime_error("Chat template missing");
 
-    std::vector<char> out(8192);
+    std::vector<char> out(8192); // Increased buffer size
 
     int n = llama_chat_apply_template(
         tmpl,
@@ -109,78 +109,77 @@ static std::string build_prompt_from_history()
     return std::string(out.data(), n);
 }
 
-// Helper: Build search decision instruction
+// Helper: Build search instruction prompt
 static std::string build_search_instruction(const std::string &user_prompt)
 {
-    return R"(Analyze the following message and decide if you need to search for information.
-
-MESSAGE CLASSIFICATION:
-- CASUAL/SOCIAL: Greetings, small talk, acknowledgments → Respond directly, NO search
-- INFORMATION REQUEST: Questions about facts, concepts, explanations → Use search()
-
-Examples:
-❌ "hi" → Respond with greeting
-❌ "thank you" → Acknowledge
-❌ "how are you" → Respond socially
-✅ "what is RAM" → search("ram memory")
-✅ "explain transformers" → search("transformer neural networks")
-
-User message: )" + user_prompt;
+    return R"(Decide if USER_MSG needs external search. Do NOT answer the message. Only classify. RULES: NO_SEARCH for greetings, chit-chat, emotional talk, acknowledgments, jokes, filler, opinions, personal updates, or questions about the assistant. SEARCH for facts, definitions, explanations, data, news, updates, instructions, comparisons, troubleshooting, or anything requiring verified info. OUTPUT: If no search → 'NO_SEARCH'. If search needed → 'SEARCH: <query>'. EXAMPLES NO_SEARCH: 'hi'→NO_SEARCH, 'how are you'→NO_SEARCH, 'thanks'→NO_SEARCH, 'i feel sad'→NO_SEARCH, 'let’s talk'→NO_SEARCH, 'tell me about yourself'→NO_SEARCH, 'write a poem'→NO_SEARCH. EXAMPLES SEARCH: 'what is RAM'→SEARCH: ram definition, 'explain transformers'→SEARCH: transformer model explanation, 'google ceo'→SEARCH: google ceo current, 'kerala weather today'→SEARCH: kerala weather today, 'population of india'→SEARCH: india population latest, 'best laptop under 50000'→SEARCH: best laptop under 50000, 'iphone 16 release date'→SEARCH: iphone 16 release date, 'fix error 0x80070005'→SEARCH: error 0x80070005 fix, 'symptoms of dengue'→SEARCH: dengue symptoms, 'ssd vs hdd'→SEARCH: ssd vs hdd comparison.
+USER_MSG: )" +
+           user_prompt;
 }
+/*
+"hi" → Respond with greeting
+"thank you" → Acknowledge
+"how are you" → Respond socially
+*/
 
-// Helper: Build answering instruction with search results
+// Helper: Build answering instruction prompt
 static std::string build_answer_instruction(
-    const std::string &original_question,
-    const std::vector<std::string> &search_results)
+    const std::string &user_prompt,
+    std::vector<std::string> &search_results)
 {
-    std::string instruction = R"(Answer the user's question using ONLY the provided search results below.
-
-INSTRUCTIONS:
-- Use only information from SEARCH RESULTS
-- Synthesize information clearly and concisely
-- If results don't contain the answer, say so
-- Do NOT call search() again
-- Cite relevant result numbers when appropriate
-
-USER'S QUESTION:
-)" + original_question + "\n\nSEARCH RESULTS:\n";
-
-    for (size_t i = 0; i < search_results.size(); i++)
+    if (search_results.size() > 0)
     {
-        instruction += "[" + std::to_string(i + 1) + "] " + search_results[i] + "\n\n";
+        std::string instruction = R"(Answer the question using ONLY the provided search results below.
+
+        INSTRUCTIONS:
+        - Use only information from SEARCH RESULTS
+        - Synthesize information clearly and concisely
+        - If results don't contain the answer, say so
+        - Do NOT call search() again
+        - Cite relevant result numbers when appropriate
+
+        QUESTION:
+        )" + user_prompt + "\n\nSEARCH RESULTS:\n";
+
+        for (size_t i = 0; i < search_results.size(); i++)
+        {
+            instruction += "[" + std::to_string(i + 1) + "] " + search_results[i] + "\n\n";
+        }
+
+        return instruction;
     }
-
-    instruction += "\nProvide a comprehensive answer based on these search results.";
-
-    return instruction;
+    else
+    {
+        std::string instruction = R"(System : You are a helpfull ai assistand
+        User :
+        )" + user_prompt;
+        return instruction;
+    }
 }
 
-std::string run_model(
-    std::string prompt,
-    bool allowSearch,
-    std::vector<std::string> search_results,
-    TokenCallback cb)
+std::string run_model(std::string prompt,
+                      bool allowSearch,
+                      std::vector<std::string> search_results,
+                      TokenCallback cb)
 {
     std::cout << "[DEBUG] ========== NEW TURN ==========\n";
     std::cout << "[DEBUG] Mode: " << (allowSearch ? "SEARCH_DECISION" : "ANSWER_WITH_RESULTS") << "\n";
-    std::cout << "[DEBUG] Prompt: " << prompt.substr(0, 100) << "...\n";
+    std::cout << "[DEBUG] User prompt: " << prompt.substr(0, 100) << "...\n";
 
     // Build the appropriate user message based on mode
     std::string user_message;
     if (allowSearch)
     {
-        // Phase 1: Ask model to classify and decide
         user_message = build_search_instruction(prompt);
     }
     else
     {
-        // Phase 2: Provide search results and ask for answer
         user_message = build_answer_instruction(prompt, search_results);
     }
 
     // Add user message to history
     g_messages.push_back({"user", strdup(user_message.c_str())});
-    
+
     std::cout << "[DEBUG] Total messages in history: " << g_messages.size() << "\n";
 
     std::string final_prompt = build_prompt_from_history();
@@ -329,7 +328,7 @@ std::string run_model(
 
     // Store RAW response (with think blocks) for cache consistency
     std::string response_for_history = raw_response;
-    
+
     // Clean for display
     remove_think_blocks(raw_response);
     std::cout << "[DEBUG] Cleaned response length: " << raw_response.size() << " chars\n";

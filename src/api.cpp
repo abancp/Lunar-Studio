@@ -2,7 +2,6 @@
 #include <cstdlib>
 #include <string>
 #include <iostream>
-#include <algorithm>
 
 #include "embed.hpp"
 #include "search.hpp"
@@ -26,7 +25,7 @@ extern "C"
     void generate(const char *prompt, C_TokenCallback cb)
     {
         std::cout << "\n[API] ========== NEW GENERATION REQUEST ==========\n";
-        std::cout << "[API] User prompt: " << std::string(prompt).substr(0, 100) << "...\n";
+        std::cout << "[API] Prompt: " << std::string(prompt).substr(0, 100) << "...\n";
 
         // -------- Safe C++ → C callback bridge --------
         TokenCallback cpp_cb = nullptr;
@@ -41,26 +40,18 @@ extern "C"
             };
         }
 
-        // Store the original prompt - we'll need it later
-        std::string original_prompt(prompt);
+        // Convert prompt safely
+        std::string prompt_cpp(prompt);
 
         // -------- PHASE 1: Ask model to decide if search is needed --------
         std::cout << "[API] Phase 1: Checking if search is needed...\n";
 
-        // Pass original_prompt to run_model in search decision phase
-        std::string decision_response = run_model(
-            original_prompt, // The user's original question
-            true,            // allowSearch = true
-            {},              // No search results yet
-            nullptr          // No callback for decision phase
-        );
+        std::string decision_response = run_model(prompt_cpp, true, {}, nullptr);
+
+        std::cout << "[DEBUG] Phase 1 output : " << decision_response << std::endl;
 
         // Check if model wants to search
-        std::string decision_response_lower = strdup(decision_response.c_str());
-        std::transform(decision_response_lower.begin(), decision_response_lower.end(), decision_response_lower.begin(),
-                       [](unsigned char c)
-                       { return std::tolower(c); });
-        bool needs_search = (decision_response_lower.find("search(") != std::string::npos);
+        bool needs_search = (decision_response.find("SEARCH") == 0);
 
         std::cout << "[API] Search needed: " << (needs_search ? "YES" : "NO") << "\n";
 
@@ -69,7 +60,12 @@ extern "C"
             // -------- PHASE 2: Extract search query and perform search --------
             std::cout << "[API] Phase 2: Extracting search query...\n";
 
-            std::string search_query = extract_search_query(decision_response_lower);
+            std::string search_query = decision_response.substr(7, decision_response.length() - 1);
+            if (cpp_cb)
+            {
+                cpp_cb("Searching... : " + search_query);
+            }
+            // std::string search_query = extract_search_query(decision_response);
             std::cout << "[API] Search query: \"" << search_query << "\"\n";
 
             if (search_query.empty())
@@ -90,11 +86,25 @@ extern "C"
             std::vector<std::string> results = search(query_embed, db_path, index_path);
 
             std::cout << "[API] Retrieved " << results.size() << " results:\n";
+
+            if (cpp_cb)
+            {
+                cpp_cb("Searched");
+            }
+
             for (size_t i = 0; i < results.size() && i < 3; i++)
             {
+
+                if (cpp_cb)
+                {
+                    cpp_cb(results[i].substr(0, 100));
+                }
                 std::cout << "  [" << i + 1 << "] "
                           << results[i].substr(0, 100) << "...\n";
             }
+
+            // -------- PHASE 3: Generate answer using search results --------
+            std::cout << "[API] Phase 3: Generating answer with search results...\n";
 
             // Ensure we have at least 3 results (pad with empty if needed)
             while (results.size() < 3)
@@ -102,16 +112,11 @@ extern "C"
                 results.push_back("[No additional information available]");
             }
 
-            // -------- PHASE 3: Generate answer using search results --------
-            std::cout << "[API] Phase 3: Generating answer with search results...\n";
-
-            // CRITICAL: Pass the ORIGINAL user prompt, not the decision response
-            // This is why we saved original_prompt at the start
             std::string final_response = run_model(
-                original_prompt, // User's ORIGINAL question: "what is RAM?"
-                false,           // allowSearch = false (don't search again)
-                results,         // The 3 search results
-                cpp_cb           // Stream tokens to user
+                prompt_cpp,
+                false, // allowSearch = false
+                results,
+                cpp_cb // Stream tokens to user
             );
 
             std::cout << "[API] Final response generated (" << final_response.size() << " chars)\n";
