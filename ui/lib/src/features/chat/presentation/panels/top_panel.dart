@@ -4,16 +4,6 @@ import 'package:bootstrap_icons/bootstrap_icons.dart';
 import 'package:LunarStudio/src/features/chat/presentation/widgets/model_select_dropdown.dart';
 import 'package:LunarStudio/src/features/chat/presentation/widgets/context_popup.dart';
 
-Future<void> showContextPopup(
-  BuildContext context,
-  List<Map<String, String>> ctx,
-) async {
-  showDialog(
-    context: context,
-    builder: (_) => ContextDebugPopup(contextList: ctx),
-  );
-}
-
 class TopPanel extends StatefulWidget {
   final String selectedModel;
   final String loadedModel;
