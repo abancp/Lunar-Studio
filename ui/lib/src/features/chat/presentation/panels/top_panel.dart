@@ -1,6 +1,18 @@
+import 'package:LunarStudio/src/ffi/llm_engine.dart';
 import 'package:flutter/material.dart';
 import 'package:bootstrap_icons/bootstrap_icons.dart';
 import 'package:LunarStudio/src/features/chat/presentation/widgets/model_select_dropdown.dart';
+import 'package:LunarStudio/src/features/chat/presentation/widgets/context_popup.dart';
+
+Future<void> showContextPopup(
+  BuildContext context,
+  List<Map<String, String>> ctx,
+) async {
+  showDialog(
+    context: context,
+    builder: (_) => ContextDebugPopup(contextList: ctx),
+  );
+}
 
 class TopPanel extends StatefulWidget {
   final String selectedModel;
@@ -110,7 +122,12 @@ class _TopPanelState extends State<TopPanel> {
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 28),
             icon: Icon(BootstrapIcons.gear, size: 16, color: cs.onSurface),
-            onPressed: () {},
+            onPressed: () async {
+              final ctx = await LLMEngine().getContext();
+              if (context.mounted) {
+                showContextPopup(context, ctx);
+              }
+            },
           ),
         ],
       ),

@@ -132,4 +132,54 @@ class LLMEngine {
 
     return completer.future;
   }
+
+  Future<List<Map<String, String>>> getContext() async {
+    if (!_ready || !isModelLoaded || modelLoading) {
+      debugPrint(
+        "Engine Ready : $_ready\n"
+        "isModelLoaded : $isModelLoaded\n"
+        "Model Loading : $modelLoading",
+      );
+      throw StateError("Engine not ready");
+    }
+
+    final completer = Completer<List<Map<String, String>>>();
+    final rp = ReceivePort();
+    final id = DateTime.now().microsecondsSinceEpoch;
+
+    late StreamSubscription sub;
+    sub = rp.listen((msg) {
+      final cmd = msg["cmd"];
+
+      if (cmd == "context" && msg["id"] == id) {
+        final ctx = (msg["context"] as List)
+            .map<Map<String, String>>(
+              (e) => {
+                "role": e["role"] as String,
+                "message": e["message"] as String,
+              },
+            )
+            .toList();
+
+        if (!completer.isCompleted) {
+          completer.complete(ctx);
+        }
+
+        sub.cancel();
+        rp.close();
+      }
+
+      if (cmd == "error") {
+        if (!completer.isCompleted) {
+          completer.completeError(Exception(msg["error"]));
+        }
+        sub.cancel();
+        rp.close();
+      }
+    });
+
+    _workerSend.send({'cmd': 'get_context', 'id': id, 'reply': rp.sendPort});
+
+    return completer.future;
+  }
 }
