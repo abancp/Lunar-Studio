@@ -97,7 +97,7 @@ int load_model(const char *model_path)
   return 0;
 }
 
-static std::string build_prompt_from_history()
+static std::string build_prompt_from_history(std::vector<llama_chat_message> messages)
 {
   const char *tmpl = llama_model_chat_template(g_model, nullptr);
 
@@ -106,13 +106,13 @@ static std::string build_prompt_from_history()
 
   std::vector<char> out(8192); // Increased buffer size
 
-  int n = llama_chat_apply_template(tmpl, g_messages.data(), g_messages.size(),
+  int n = llama_chat_apply_template(tmpl, messages.data(), messages.size(),
                                     true, out.data(), out.size());
 
   if (n > (int)out.size())
   {
     out.resize(n + 1024);
-    n = llama_chat_apply_template(tmpl, g_messages.data(), g_messages.size(),
+    n = llama_chat_apply_template(tmpl, messages.data(), messages.size(),
                                   true, out.data(), out.size());
   }
 
@@ -184,8 +184,9 @@ std::string llm_inference(
 
   std::cout << "[DEBUG] Total messages in history: " << messages.size() << "\n";
 
-  std::string final_prompt = build_prompt_from_history();
+  std::string final_prompt = build_prompt_from_history(messages);
   std::cout << "[DEBUG] Final prompt length: " << final_prompt.size() << " chars\n";
+  std::cout << "[DEBUG] Final prompt : " << final_prompt << " chars\n";
 
   if (!ctx)
   {
@@ -312,29 +313,44 @@ std::string run_model(std::string prompt, bool allowSearch,
   std::cout << "[DEBUG] User prompt: " << prompt.substr(0, 100) << "...\n";
 
   std::string user_message;
+  std::string raw_response;
   if (allowSearch)
   {
     user_message = build_search_instruction(prompt);
+    raw_response = llm_inference(
+        prompt,
+        g_tools_messages,
+        g_tools_ctx,
+        g_ctx_params,
+        const_cast<llama_vocab *>(g_vocab),
+        g_tools_sampler,
+        g_cached_tokens_tools,
+        g_cached_prompt_tokens_tools,
+        g_model,
+        allowSearch,
+        cb);
   }
   else
   {
     user_message = build_answer_instruction(prompt, search_results);
+    raw_response = llm_inference(
+        prompt,
+        g_messages,
+        g_ctx,
+        g_ctx_params,
+        const_cast<llama_vocab *>(g_vocab),
+        g_sampler,
+        g_cached_tokens,
+        g_cached_prompt_tokens,
+        g_model,
+        allowSearch,
+        cb);
   }
 
-  std::string raw_response = llm_inference(
-      prompt,
-      g_messages,
-      g_ctx,
-      g_ctx_params,
-      const_cast<llama_vocab *>(g_vocab),
-      g_sampler,
-      g_cached_tokens,
-      g_cached_prompt_tokens,
-      g_model,
-      allowSearch,
-      cb);
   std::cout << "[DEBUG] Total cached tokens after generation: "
             << g_cached_tokens << "\n";
+  std::cout << "[DEBUG] Total cached tokens after generation (tools) : "
+            << g_cached_tokens_tools << "\n";
   std::cout << "[DEBUG] Raw response length: " << raw_response.size()
             << " chars\n";
 
@@ -347,8 +363,14 @@ std::string run_model(std::string prompt, bool allowSearch,
             << " chars\n";
 
   // Add to message history (raw version for cache consistency)
-  g_messages.push_back({"assistant", strdup(response_for_history.c_str())});
-
+  if (allowSearch)
+  {
+    g_tools_messages.push_back({"assistant", strdup(response_for_history.c_str())});
+  }
+  else
+  {
+    g_messages.push_back({"assistant", strdup(response_for_history.c_str())});
+  }
   std::cout << "[DEBUG] ========== TURN END ==========\n\n";
 
   return raw_response;
@@ -358,4 +380,4 @@ std::string run_model(std::string prompt, bool allowSearch,
 std::vector<llama_chat_message> get_context()
 {
   return g_messages;
-}
+} 
