@@ -125,8 +125,19 @@ static std::string build_prompt_from_history(std::vector<llama_chat_message> mes
 // Helper: Build search instruction prompt
 static std::string build_search_instruction(const std::string &user_prompt)
 {
-  return R"(Decide if USER_MSG needs external search. Do NOT answer the message. Only classify. RULES: NO_SEARCH for greetings, chit-chat, emotional talk, acknowledgments, jokes, filler, opinions, personal updates, or questions about the assistant. SEARCH for facts, definitions, explanations, data, news, updates, instructions, comparisons, troubleshooting, or anything requiring verified info. OUTPUT: If no search → 'NO_SEARCH'. If search needed → 'SEARCH: <query>'. EXAMPLES NO_SEARCH: 'hi'→NO_SEARCH, 'how are you'→NO_SEARCH, 'thanks'→NO_SEARCH, 'i feel sad'→NO_SEARCH, 'let’s talk'→NO_SEARCH, 'tell me about yourself'→NO_SEARCH, 'write a poem'→NO_SEARCH. EXAMPLES SEARCH: 'what is RAM'→SEARCH: ram definition, 'explain transformers'→SEARCH: transformer model explanation, 'google ceo'→SEARCH: google ceo current, 'kerala weather today'→SEARCH: kerala weather today, 'population of india'→SEARCH: india population latest, 'best laptop under 50000'→SEARCH: best laptop under 50000, 'iphone 16 release date'→SEARCH: iphone 16 release date, 'fix error 0x80070005'→SEARCH: error 0x80070005 fix, 'symptoms of dengue'→SEARCH: dengue symptoms, 'ssd vs hdd'→SEARCH: ssd vs hdd comparison.
-USER_MSG: )" +
+  return R"(Decide if the USER_MSG requires external factual information . 
+If not, output: NO_SEARCH
+If yes, output: SEARCH: <minimal noun-phrase query>
+
+Rules:
+- The query must be a compact noun phrase.
+- Do not expand the query beyond the essential concept.
+- Convert questions like "who is the first programmer?" → "first programmer".
+- Rewrite "causes of malaria" → "malaria causes".
+- Rewrite "how to fix error 0x80070005" → "error 0x80070005 fix".
+- Output exactly one line. Never answer the user.
+USER_MSG:
+ )" +
          user_prompt;
 }
 
@@ -140,17 +151,17 @@ static std::string build_answer_instruction(const std::string &user_prompt,
         R"(Answer the question using the provided search results below.
 
         INSTRUCTIONS:
-        - Use information from SEARCH RESULTS
+        - Use information from SEARCH_RESULTS
         - Synthesize information clearly and concisely
         - If results don't contain the answer, say your answer
-        - Do NOT call search() again
-        - Cite relevant result numbers when appropriate
-
+        - You must always answer in a clear, structured format.
+          Use headings, subheadings, bullet points, short paragraphs, and examples when appropriate.
+          Respond professionally and avoid long unstructured text.
         QUESTION:
         )" +
         user_prompt + "\n\nSEARCH RESULTS:\n";
 
-    for (size_t i = 0; i < search_results.size(); i++)
+    for (size_t i = 0; i < (search_results.size() > 3 ? 3 : search_results.size()); i++)
     {
       instruction +=
           "[" + std::to_string(i + 1) + "] " + search_results[i] + "\n\n";
@@ -316,7 +327,7 @@ std::string run_model(std::string prompt, bool allowSearch,
   std::string raw_response;
   if (allowSearch)
   {
-    user_message = build_search_instruction(prompt);
+    // user_message = build_search_instruction(prompt);
     raw_response = llm_inference(
         prompt,
         g_tools_messages,
@@ -334,7 +345,7 @@ std::string run_model(std::string prompt, bool allowSearch,
   {
     user_message = build_answer_instruction(prompt, search_results);
     raw_response = llm_inference(
-        prompt,
+        user_message,
         g_messages,
         g_ctx,
         g_ctx_params,
@@ -354,15 +365,10 @@ std::string run_model(std::string prompt, bool allowSearch,
   std::cout << "[DEBUG] Raw response length: " << raw_response.size()
             << " chars\n";
 
-  // Store RAW response (with think blocks) for cache consistency
-  std::string response_for_history = raw_response;
-
-  // Clean for display
   remove_think_blocks(raw_response);
+  std::string response_for_history = raw_response;
   std::cout << "[DEBUG] Cleaned response length: " << raw_response.size()
             << " chars\n";
-
-  // Add to message history (raw version for cache consistency)
   if (allowSearch)
   {
     g_tools_messages.push_back({"assistant", strdup(response_for_history.c_str())});
@@ -379,5 +385,5 @@ std::string run_model(std::string prompt, bool allowSearch,
 // For debug live context
 std::vector<llama_chat_message> get_context()
 {
-  return g_messages;
-} 
+  return g_tools_messages;
+}

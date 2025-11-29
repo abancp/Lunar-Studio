@@ -249,7 +249,6 @@ class _ContextPopupState extends State<ContextPopup> {
 
                   const SizedBox(height: 12),
 
-                  //--------------------------- Main content area ---------------------------
                   Expanded(
                     child: isWide
                         ? Row(
@@ -398,7 +397,6 @@ class _ContextPopupState extends State<ContextPopup> {
     );
   }
 
-  //------------------------------ RIGHT PANE -----------------------------------
   Widget _buildDetailPanel(ColorScheme cs, TextTheme textTheme) {
     if (_selectedIndex < 0 || _selectedIndex >= _filtered.length) {
       return Center(child: Text('No selection', style: textTheme.bodyLarge));

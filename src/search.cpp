@@ -60,7 +60,6 @@ std::vector<std::string> search(std::vector<float> query_emb, std::string db_pat
         std::cout << "[" << i + 1 << "] " << text << "  (dist=" << D[i] << ")\n";
         result.push_back(text);
     }
-
     delete index;
     return result;
 }

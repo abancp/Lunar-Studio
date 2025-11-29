@@ -70,7 +70,8 @@ extern "C"
           decision_response.substr(7, decision_response.length() - 1);
       if (cpp_cb)
       {
-        cpp_cb("Searching... : " + search_query);
+        cpp_cb("<search>");
+        cpp_cb(search_query);
       }
       // std::string search_query = extract_search_query(decision_response);
       std::cout << "[API] Search query: \"" << search_query << "\"\n";
@@ -96,17 +97,14 @@ extern "C"
 
       std::cout << "[API] Retrieved " << results.size() << " results:\n";
 
-      if (cpp_cb)
-      {
-        cpp_cb("Searched");
-      }
-
       for (size_t i = 0; i < results.size() && i < 3; i++)
       {
 
         if (cpp_cb)
         {
+          cpp_cb("<result>");
           cpp_cb(results[i].substr(0, 100));
+          cpp_cb("</result>");
         }
         std::cout << "  [" << i + 1 << "] " << results[i].substr(0, 100)
                   << "...\n";
@@ -120,6 +118,9 @@ extern "C"
       {
         results.push_back("[No additional information available]");
       }
+
+      if (cpp_cb)
+        cb("</search>");
 
       std::string final_response = run_model(prompt_cpp,
                                              false, // allowSearch = false
@@ -135,14 +136,14 @@ extern "C"
       // -------- No search needed: Direct response --------
       std::cout << "[API] Providing direct response (no search needed)\n";
 
-      // The decision_response IS the answer, stream it if callback exists
       if (cpp_cb)
       {
         // Stream the response token by token
-        for (char c : decision_response)
-        {
-          cpp_cb(std::string(1, c));
-        }
+        std::string final_response = run_model(prompt_cpp,
+                                               false, // allowSearch = false
+                                               {},
+                                               cpp_cb // Stream tokens to user
+        );
       }
     }
 
@@ -164,5 +165,4 @@ extern "C"
 
     return ChatArrayC{c_context, size};
   }
-  
 }

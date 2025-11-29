@@ -56,20 +56,20 @@ List<_TextSpan> _parseBoldText(String text) {
 
 /// Check if text contains closed thinking tags
 bool _hasClosedThinkTag(String text) {
-  return text.contains('</think>');
+  return text.contains('</search>');
 }
 
 /// Check if text has open thinking tag
 bool _hasOpenThinkTag(String text) {
-  return text.contains('<think>');
+  return text.contains('<search>');
 }
 
-/// Parse full text including <think>...</think> and visible content.
+/// Parse full text including <search>...</search> and visible content.
 List<_Chunk> parseTextToChunks(String text) {
   final List<_Chunk> chunks = [];
   int idx = 0;
   while (idx < text.length) {
-    final startTag = text.indexOf('<think>', idx);
+    final startTag = text.indexOf('<search>', idx);
     if (startTag == -1) {
       final rem = text.substring(idx);
       if (rem.isNotEmpty) {
@@ -83,7 +83,7 @@ List<_Chunk> parseTextToChunks(String text) {
         chunks.addAll(_parseVisibleSegment(plain));
       }
     }
-    final endTag = text.indexOf('</think>', startTag + 7);
+    final endTag = text.indexOf('</search>', startTag + 7);
     if (endTag == -1) {
       final inner = text.substring(startTag + 7);
       if (inner.isNotEmpty) {
@@ -1370,8 +1370,8 @@ class _ChatMessage {
     // Update thinking active status
     // Thinking is active if there's an open tag but the most recent one is not closed
     if (hasOpenTag) {
-      final lastOpenIndex = fullText.lastIndexOf('<think>');
-      final lastCloseIndex = fullText.lastIndexOf('</think>');
+      final lastOpenIndex = fullText.lastIndexOf('<search>');
+      final lastCloseIndex = fullText.lastIndexOf('</search>');
       _isThinkingActive = lastCloseIndex < lastOpenIndex;
     } else {
       _isThinkingActive = false;
