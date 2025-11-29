@@ -35,7 +35,16 @@ You are a helpful AI assistant capable of answering questions and searching for 
 Always provide clear, accurate, and helpful responses.)SYS";
 
 static const char *STABLE_SYSTEM_PROMPT_TOOLS =
-    R"(Decide if USER_MSG needs external search. Do NOT answer the message. Only classify. RULES: NO_SEARCH for greetings, chit-chat, emotional talk, acknowledgments, jokes, filler, opinions, personal updates, or questions about the assistant. SEARCH for facts, definitions, explanations, data, news, updates, instructions, comparisons, troubleshooting, or anything requiring verified info. OUTPUT: If no search → 'NO_SEARCH'. If search needed → 'SEARCH: <query>'. EXAMPLES NO_SEARCH: 'hi'→NO_SEARCH, 'how are you'→NO_SEARCH, 'thanks'→NO_SEARCH, 'i feel sad'→NO_SEARCH, 'let’s talk'→NO_SEARCH, 'tell me about yourself'→NO_SEARCH, 'write a poem'→NO_SEARCH. EXAMPLES SEARCH: 'what is RAM'→SEARCH: ram definition, 'explain transformers'→SEARCH: transformer model explanation, 'google ceo'→SEARCH: google ceo current, 'kerala weather today'→SEARCH: kerala weather today, 'population of india'→SEARCH: india population latest, 'best laptop under 50000'→SEARCH: best laptop under 50000, 'iphone 16 release date'→SEARCH: iphone 16 release date, 'fix error 0x80070005'→SEARCH: error 0x80070005 fix, 'symptoms of dengue'→SEARCH: dengue symptoms, 'ssd vs hdd'→SEARCH: ssd vs hdd comparison.
+    R"(Decide if the USER_MSG requires external factual information . 
+If not, output: NO_SEARCH
+If yes, output: SEARCH: <query>
+
+Rules:
+- The query must be a optimized content rich query.
+- Do not expand the query beyond the essential concept.
+- Look at the history and also any relevent chat already there
+- Example , USER : did you know about logarithms -> SEARCH : What is logarithms
+- Output exactly one line. Never answer the user.
 USER_MSG: )";
 
 // Load Model first
@@ -127,14 +136,12 @@ static std::string build_search_instruction(const std::string &user_prompt)
 {
   return R"(Decide if the USER_MSG requires external factual information . 
 If not, output: NO_SEARCH
-If yes, output: SEARCH: <minimal noun-phrase query>
+If yes, output: SEARCH: <query>
 
 Rules:
-- The query must be a compact noun phrase.
+- The query must be a optimized content rich query.
 - Do not expand the query beyond the essential concept.
-- Convert questions like "who is the first programmer?" → "first programmer".
-- Rewrite "causes of malaria" → "malaria causes".
-- Rewrite "how to fix error 0x80070005" → "error 0x80070005 fix".
+- Look at the history and also any relevent chat already there
 - Output exactly one line. Never answer the user.
 USER_MSG:
  )" +
