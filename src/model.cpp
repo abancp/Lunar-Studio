@@ -32,7 +32,7 @@ static std::vector<llama_token> g_cached_prompt_tokens_tools;
 static const char *STABLE_SYSTEM_PROMPT =
     R"SYS(You are LunarStudio, created by Aban Muhammed (AI Researcher & Engineer).
 You are a helpful AI assistant capable of answering questions and searching for information when needed.
-Always provide clear, accurate, and helpful responses.)SYS";
+Always provide clear, accurate, formatted and helpful responses.)SYS";
 
 static const char *STABLE_SYSTEM_PROMPT_TOOLS =
     R"(Decide if the USER_MSG requires external factual information . 
@@ -80,13 +80,13 @@ int load_model(const char *model_path)
 
   g_sampler = llama_sampler_chain_init(llama_sampler_chain_default_params());
   llama_sampler_chain_add(g_sampler, llama_sampler_init_min_p(0.05f, 1));
-  llama_sampler_chain_add(g_sampler, llama_sampler_init_temp(0.8f));
+  llama_sampler_chain_add(g_sampler, llama_sampler_init_temp(0.7f));
   llama_sampler_chain_add(g_sampler,
                           llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
 
   g_tools_sampler = llama_sampler_chain_init(llama_sampler_chain_default_params());
   llama_sampler_chain_add(g_tools_sampler, llama_sampler_init_min_p(0.05f, 1));
-  llama_sampler_chain_add(g_tools_sampler, llama_sampler_init_temp(0.8f));
+  llama_sampler_chain_add(g_tools_sampler, llama_sampler_init_temp(0.7f));
   llama_sampler_chain_add(g_tools_sampler,
                           llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
 
@@ -178,7 +178,10 @@ static std::string build_answer_instruction(const std::string &user_prompt,
   }
   else
   {
-    std::string instruction = R"(System : You are a helpfull ai assistand
+    std::string instruction = R"(System : You are a helpfull ai assistand 
+      You must always answer in a clear, structured format.
+          Use headings, subheadings, bullet points, short paragraphs, and examples when appropriate.
+          Respond professionally and avoid long unstructured text.
         User :
         )" + user_prompt;
     return instruction;
@@ -392,5 +395,5 @@ std::string run_model(std::string prompt, bool allowSearch,
 // For debug live context
 std::vector<llama_chat_message> get_context()
 {
-  return g_tools_messages;
+  return g_messages;
 }
