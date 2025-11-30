@@ -2,12 +2,22 @@
 #define LUNARSTUDIO_API_H
 
 #ifdef __cplusplus
-extern "C"
-{
+extern "C" {
 #endif
-    typedef void (*C_TokenCallback)(const char *);
-    void load_llm(const char* model_path);
-    void generate(const char *prompt, C_TokenCallback callback);
+struct ChatEntryC {
+  const char *role;
+  const char *message;
+};
+
+struct ChatArrayC {
+  ChatEntryC *items;
+  size_t size;
+};
+
+typedef void (*C_TokenCallback)(const char *);
+void load_llm(const char *model_path);
+void generate(const char *prompt, C_TokenCallback callback);
+ChatArrayC get_context_c();
 #ifdef __cplusplus
 }
 #endif
