@@ -7,19 +7,34 @@ import 'package:flutter/services.dart';
 import 'package:LunarStudio/src/ffi/llm_engine.dart';
 import 'package:flutter_highlight/flutter_highlight.dart';
 import 'package:flutter_highlight/themes/vs2015.dart';
+import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:motion_toast/motion_toast.dart';
 import 'package:path/path.dart' as p;
 
-enum ChunkType { plain, thinking, code, heading, bullet, table, blockquote }
+// --- 1. DATA STRUCTURES (Unified) ---
 
-class _TextSpan {
+enum ChunkType {
+  plain,
+  thinking,
+  code,
+  heading,
+  bullet,
+  table,
+  blockquote,
+  latexBlock,
+}
+
+enum SpanType { plain, bold, latexInline }
+
+// Replaces the old _TextSpan class
+class _Span {
   final String text;
-  final bool isBold;
-  const _TextSpan(this.text, this.isBold);
+  final SpanType type;
+  const _Span(this.text, this.type);
 }
 
 class _Chunk {
-  final List<_TextSpan> spans;
+  final List<_Span> spans; // STRICTLY uses _Span now
   final ChunkType type;
   final String? language;
   final Map<String, dynamic>? metadata;
@@ -27,32 +42,39 @@ class _Chunk {
   const _Chunk(this.spans, this.type, {this.language, this.metadata});
 }
 
-/// Parse bold markdown (**text**) into spans
-List<_TextSpan> _parseBoldText(String text) {
-  final List<_TextSpan> spans = [];
-  int idx = 0;
-  while (idx < text.length) {
-    final boldStart = text.indexOf('**', idx);
-    if (boldStart == -1) {
-      if (idx < text.length) {
-        spans.add(_TextSpan(text.substring(idx), false));
-      }
-      break;
+// --- 2. PARSING LOGIC ---
+
+/// Unified parser: Handles **Bold** and \( Latex \)
+List<_Span> _parseRichText(String text) {
+  final List<_Span> spans = [];
+
+  // Regex matches: \( ... \) OR ** ... **
+  final regex = RegExp(r'(\\\(.*?\\\))|(\*\*.*?\*\*)');
+
+  int start = 0;
+  for (final match in regex.allMatches(text)) {
+    if (match.start > start) {
+      spans.add(_Span(text.substring(start, match.start), SpanType.plain));
     }
-    if (boldStart > idx) {
-      spans.add(_TextSpan(text.substring(idx, boldStart), false));
+
+    final String matchText = match.group(0)!;
+
+    if (matchText.startsWith(r'\(')) {
+      // Inline Math: Remove \( and \)
+      final cleanMath = matchText.substring(2, matchText.length - 2);
+      spans.add(_Span(cleanMath, SpanType.latexInline));
+    } else {
+      // Bold: Remove ** and **
+      final cleanBold = matchText.substring(2, matchText.length - 2);
+      spans.add(_Span(cleanBold, SpanType.bold));
     }
-    final boldEnd = text.indexOf('**', boldStart + 2);
-    if (boldEnd == -1) {
-      spans.add(_TextSpan(text.substring(boldStart), false));
-      break;
-    }
-    final boldText = text.substring(boldStart + 2, boldEnd);
-    if (boldText.isNotEmpty) {
-      spans.add(_TextSpan(boldText, true));
-    }
-    idx = boldEnd + 2;
+    start = match.end;
   }
+
+  if (start < text.length) {
+    spans.add(_Span(text.substring(start), SpanType.plain));
+  }
+
   return spans;
 }
 
@@ -77,12 +99,12 @@ List<_Chunk> parseTextToChunks(String text) {
     if (endTag == -1) {
       final inner = text.substring(startTag + 7);
       if (inner.isNotEmpty)
-        chunks.add(_Chunk(_parseBoldText(inner), ChunkType.thinking));
+        chunks.add(_Chunk(_parseRichText(inner), ChunkType.thinking));
       break;
     } else {
       final inner = text.substring(startTag + 7, endTag);
       if (inner.isNotEmpty)
-        chunks.add(_Chunk(_parseBoldText(inner), ChunkType.thinking));
+        chunks.add(_Chunk(_parseRichText(inner), ChunkType.thinking));
       idx = endTag + 8;
     }
   }
@@ -111,9 +133,10 @@ List<_Chunk> _parseVisibleSegment(String text) {
     if (fenceEnd == -1) {
       final code = text.substring(langLineEnd + 1);
       if (code.trim().isNotEmpty) {
+        // FIXED: Explicitly use _Span here
         chunks.add(
           _Chunk(
-            [_TextSpan(code.trimRight(), false)],
+            [_Span(code.trimRight(), SpanType.plain)],
             ChunkType.code,
             language: language.isEmpty ? null : language,
           ),
@@ -123,9 +146,10 @@ List<_Chunk> _parseVisibleSegment(String text) {
     } else {
       final code = text.substring(langLineEnd + 1, fenceEnd);
       if (code.trim().isNotEmpty) {
+        // FIXED: Explicitly use _Span here
         chunks.add(
           _Chunk(
-            [_TextSpan(code.trimRight(), false)],
+            [_Span(code.trimRight(), SpanType.plain)],
             ChunkType.code,
             language: language.isEmpty ? null : language,
           ),
@@ -137,17 +161,16 @@ List<_Chunk> _parseVisibleSegment(String text) {
   return chunks;
 }
 
-/// **UPDATED PARSER**: Robust table detection
 void _splitPlainIntoStructure(String text, List<_Chunk> chunks) {
   final lines = text.split('\n');
   List<String> tableBuffer = [];
+  List<String> latexBuffer = [];
+  bool inLatexBlock = false;
 
   void flushTable() {
     if (tableBuffer.isNotEmpty) {
-      // Filter out lines that are purely dividers (e.g. |---|---|) to clean up data before rendering
       final cleanRows = tableBuffer.where((row) {
         final trimmed = row.trim();
-        // Keep it if it has text, remove if it's just dashes/pipes
         return trimmed.replaceAll(RegExp(r'[|\-\s]'), '').isNotEmpty ||
             trimmed.contains('|');
       }).toList();
@@ -157,18 +180,28 @@ void _splitPlainIntoStructure(String text, List<_Chunk> chunks) {
           _Chunk(
             const [],
             ChunkType.table,
-            metadata: {
-              'rows': List<String>.from(tableBuffer),
-            }, // Pass original buffer, renderer handles specifics
+            metadata: {'rows': List<String>.from(tableBuffer)},
           ),
         );
       } else {
-        // Not a table, just text lines
         for (var row in tableBuffer) {
-          chunks.add(_Chunk(_parseBoldText(row), ChunkType.plain));
+          chunks.add(_Chunk(_parseRichText(row), ChunkType.plain));
         }
       }
       tableBuffer.clear();
+    }
+  }
+
+  void flushLatex() {
+    if (latexBuffer.isNotEmpty) {
+      String math = latexBuffer.join('\n').trim();
+      if (math.startsWith(r'\[')) math = math.substring(2);
+      if (math.endsWith(r'\]')) math = math.substring(0, math.length - 2);
+
+      chunks.add(
+        _Chunk(const [], ChunkType.latexBlock, metadata: {'math': math.trim()}),
+      );
+      latexBuffer.clear();
     }
   }
 
@@ -176,12 +209,25 @@ void _splitPlainIntoStructure(String text, List<_Chunk> chunks) {
     final line = rawLine.trimRight();
     final trimmed = line.trim();
 
-    // Check if line looks like a table row (starts with |)
+    if (trimmed.startsWith(r'\[')) {
+      flushTable();
+      inLatexBlock = true;
+    }
+
+    if (inLatexBlock) {
+      latexBuffer.add(line);
+      if (trimmed.endsWith(r'\]')) {
+        inLatexBlock = false;
+        flushLatex();
+      }
+      continue;
+    }
+
     if (trimmed.startsWith('|')) {
       tableBuffer.add(line);
       continue;
     } else {
-      flushTable(); // Found a non-table line, flush buffer
+      flushTable();
     }
 
     if (line.isEmpty) continue;
@@ -189,7 +235,7 @@ void _splitPlainIntoStructure(String text, List<_Chunk> chunks) {
     if (line.startsWith('### ')) {
       chunks.add(
         _Chunk(
-          _parseBoldText(line.substring(4).trimLeft()),
+          _parseRichText(line.substring(4).trimLeft()),
           ChunkType.heading,
           metadata: {'level': 3},
         ),
@@ -197,7 +243,7 @@ void _splitPlainIntoStructure(String text, List<_Chunk> chunks) {
     } else if (line.startsWith('## ')) {
       chunks.add(
         _Chunk(
-          _parseBoldText(line.substring(3).trimLeft()),
+          _parseRichText(line.substring(3).trimLeft()),
           ChunkType.heading,
           metadata: {'level': 2},
         ),
@@ -205,7 +251,7 @@ void _splitPlainIntoStructure(String text, List<_Chunk> chunks) {
     } else if (line.startsWith('# ')) {
       chunks.add(
         _Chunk(
-          _parseBoldText(line.substring(2).trimLeft()),
+          _parseRichText(line.substring(2).trimLeft()),
           ChunkType.heading,
           metadata: {'level': 1},
         ),
@@ -213,21 +259,24 @@ void _splitPlainIntoStructure(String text, List<_Chunk> chunks) {
     } else if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
       final bulletText = trimmed.substring(2).trimLeft();
       if (bulletText.isNotEmpty) {
-        chunks.add(_Chunk(_parseBoldText(bulletText), ChunkType.bullet));
+        chunks.add(_Chunk(_parseRichText(bulletText), ChunkType.bullet));
       }
     } else if (trimmed.startsWith('> ')) {
       chunks.add(
         _Chunk(
-          _parseBoldText(trimmed.substring(2).trimLeft()),
+          _parseRichText(trimmed.substring(2).trimLeft()),
           ChunkType.blockquote,
         ),
       );
     } else {
-      chunks.add(_Chunk(_parseBoldText(line), ChunkType.plain));
+      chunks.add(_Chunk(_parseRichText(line), ChunkType.plain));
     }
   }
   flushTable();
+  flushLatex();
 }
+
+// --- 3. WIDGETS ---
 
 class MainPanel extends StatefulWidget {
   final bool engineReady;
@@ -635,22 +684,36 @@ class MessageBubble extends StatefulWidget {
 class _MessageBubbleState extends State<MessageBubble> {
   bool _showThinking = false;
 
-  Widget _buildRichText(List<_TextSpan> spans, TextStyle baseStyle) {
+  Widget _buildRichText(List<_Span> spans, TextStyle baseStyle) {
     return RichText(
       text: TextSpan(
         children: spans.map((span) {
-          return TextSpan(
-            text: span.text,
-            style: span.isBold
-                ? baseStyle.copyWith(fontWeight: FontWeight.w800)
-                : baseStyle,
-          );
+          if (span.type == SpanType.latexInline) {
+            return WidgetSpan(
+              alignment: PlaceholderAlignment.middle,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 2.0),
+                child: Math.tex(
+                  span.text,
+                  textStyle: baseStyle.copyWith(
+                    fontSize: (baseStyle.fontSize ?? 14) * 0.95,
+                  ),
+                ),
+              ),
+            );
+          } else if (span.type == SpanType.bold) {
+            return TextSpan(
+              text: span.text,
+              style: baseStyle.copyWith(fontWeight: FontWeight.w800),
+            );
+          } else {
+            return TextSpan(text: span.text, style: baseStyle);
+          }
         }).toList(),
       ),
     );
   }
 
-  /// **UPDATED TABLE RENDERER**: Safe, Crash-Proof
   Widget _buildTable(
     List<String> rawRows,
     TextStyle baseStyle,
@@ -658,13 +721,11 @@ class _MessageBubbleState extends State<MessageBubble> {
   ) {
     if (rawRows.isEmpty) return const SizedBox.shrink();
 
-    // 1. Process rows to determine max columns and clean data
     List<List<String>> processedRows = [];
     int maxCols = 0;
 
     for (String row in rawRows) {
-      if (row.contains('---')) continue; // Skip separator lines completely
-
+      if (row.contains('---')) continue;
       String cleanRow = row.trim();
       if (cleanRow.startsWith('|')) cleanRow = cleanRow.substring(1);
       if (cleanRow.endsWith('|'))
@@ -677,15 +738,12 @@ class _MessageBubbleState extends State<MessageBubble> {
 
     if (processedRows.isEmpty || maxCols == 0) return const SizedBox.shrink();
 
-    // 2. Build Table Rows with STRICT cell count matching
     List<TableRow> rows = [];
     for (int i = 0; i < processedRows.length; i++) {
       final List<String> cells = processedRows[i];
       final bool isHeader = i == 0;
-
       List<Widget> cellWidgets = [];
 
-      // Add actual cells
       for (var cell in cells) {
         cellWidgets.add(
           TableCell(
@@ -694,7 +752,7 @@ class _MessageBubbleState extends State<MessageBubble> {
               padding: const EdgeInsets.all(8.0),
               color: isHeader ? cs.primary.withOpacity(0.08) : null,
               child: _buildRichText(
-                _parseBoldText(cell.trim()),
+                _parseRichText(cell.trim()), // Uses the new Parser
                 baseStyle.copyWith(
                   fontSize: baseStyle.fontSize! - 1,
                   fontWeight: isHeader ? FontWeight.bold : FontWeight.normal,
@@ -705,8 +763,6 @@ class _MessageBubbleState extends State<MessageBubble> {
         );
       }
 
-      // **CRITICAL FIX**: Pad row with empty cells if it's shorter than maxCols
-      // This prevents the "red screen" crash
       while (cellWidgets.length < maxCols) {
         cellWidgets.add(
           const TableCell(
@@ -714,11 +770,8 @@ class _MessageBubbleState extends State<MessageBubble> {
           ),
         );
       }
-
-      // If row has too many cells (rare parser glitch), truncate
-      if (cellWidgets.length > maxCols) {
+      if (cellWidgets.length > maxCols)
         cellWidgets = cellWidgets.sublist(0, maxCols);
-      }
 
       rows.add(
         TableRow(
@@ -819,6 +872,30 @@ class _MessageBubbleState extends State<MessageBubble> {
                     c.metadata!['rows'] as List<String>,
                     widget.plainStyle,
                     cs,
+                  ),
+                );
+              }
+              break;
+            case ChunkType.latexBlock:
+              if (c.metadata != null && c.metadata!['math'] != null) {
+                children.add(
+                  Container(
+                    width: double.infinity,
+                    margin: const EdgeInsets.symmetric(vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 8,
+                      horizontal: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: cs.surfaceVariant.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Center(
+                      child: Math.tex(
+                        c.metadata!['math'],
+                        textStyle: widget.plainStyle.copyWith(fontSize: 16),
+                      ),
+                    ),
                   ),
                 );
               }
@@ -963,16 +1040,17 @@ class _ThinkingSectionState extends State<ThinkingSection>
     super.dispose();
   }
 
-  Widget _buildRichText(List<_TextSpan> spans, TextStyle baseStyle) {
+  Widget _buildRichText(List<_Span> spans, TextStyle baseStyle) {
     return RichText(
       text: TextSpan(
         children: spans.map((span) {
-          return TextSpan(
-            text: span.text,
-            style: span.isBold
-                ? baseStyle.copyWith(fontWeight: FontWeight.w700)
-                : baseStyle,
-          );
+          if (span.type == SpanType.bold) {
+            return TextSpan(
+              text: span.text,
+              style: baseStyle.copyWith(fontWeight: FontWeight.bold),
+            );
+          }
+          return TextSpan(text: span.text, style: baseStyle);
         }).toList(),
       ),
     );
@@ -1334,10 +1412,11 @@ class _ChatMessage {
     final wasThinking = _isThinkingActive;
     final parsed = parseTextToChunks(fullText);
     _chunks.clear();
+    // FIXED: Uses _Span for empty chunk to prevent type error
     _chunks.addAll(
       parsed.isEmpty
           ? [
-              _Chunk(const [_TextSpan('', false)], ChunkType.plain),
+              _Chunk(const [_Span('', SpanType.plain)], ChunkType.plain),
             ]
           : parsed,
     );
