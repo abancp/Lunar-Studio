@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:LunarStudio/src/core/db/app_db.dart';
+import 'package:bootstrap_icons/bootstrap_icons.dart';
 
 class LeftPanel extends StatefulWidget {
   final List<Map<String, dynamic>> chats;
@@ -117,12 +118,7 @@ class _LeftPanelState extends State<LeftPanel>
       width: 280,
       decoration: BoxDecoration(
         color: cs.surface,
-        border: Border(
-          right: BorderSide(
-            color: cs.outline,
-            width: 1,
-          ),
-        ),
+        border: Border(right: BorderSide(color: cs.outline, width: 1)),
       ),
       child: Column(
         children: [
@@ -135,15 +131,30 @@ class _LeftPanelState extends State<LeftPanel>
                 onTap: newChat,
                 borderRadius: BorderRadius.circular(8),
                 child: Container(
-                  height: 36,
+                  height: 40,
                   decoration: BoxDecoration(
-                    color: cs.primary,
-                    borderRadius: BorderRadius.circular(8),
+                    gradient: LinearGradient(
+                      colors: [cs.primary, cs.primary.withOpacity(0.8)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [
+                      BoxShadow(
+                        color: cs.primary.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.add_rounded, color: cs.onPrimary, size: 20),
+                      Icon(
+                        BootstrapIcons.plus_lg,
+                        color: cs.onPrimary,
+                        size: 16,
+                      ),
                       const SizedBox(width: 8),
                       Text(
                         'New Chat',
@@ -151,6 +162,7 @@ class _LeftPanelState extends State<LeftPanel>
                           color: cs.onPrimary,
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
+                          letterSpacing: 0.3,
                         ),
                       ),
                     ],
@@ -168,8 +180,8 @@ class _LeftPanelState extends State<LeftPanel>
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(
-                          Icons.chat_bubble_outline_rounded,
-                          size: 64,
+                          BootstrapIcons.chat_square_dots,
+                          size: 48,
                           color: cs.outline.withOpacity(0.3),
                         ),
                         const SizedBox(height: 16),
@@ -177,142 +189,150 @@ class _LeftPanelState extends State<LeftPanel>
                           'No chats yet',
                           style: TextStyle(
                             color: cs.onSurface.withOpacity(0.6),
-                            fontSize: 16,
+                            fontSize: 15,
                             fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Start a new conversation',
-                          style: TextStyle(
-                            color: cs.onSurface.withOpacity(0.4),
-                            fontSize: 13,
                           ),
                         ),
                       ],
                     ),
                   )
-                : Scrollbar(
-                    controller: _scrollController,
-                    child: ListView.builder(
+                : Theme(
+                    data: Theme.of(context).copyWith(
+                      scrollbarTheme: ScrollbarThemeData(
+                        thumbVisibility: MaterialStateProperty.all(true),
+                        thickness: MaterialStateProperty.all(4),
+                        radius: const Radius.circular(10),
+                        thumbColor: MaterialStateProperty.all(
+                          cs.outline.withOpacity(0.3),
+                        ),
+                      ),
+                    ),
+                    child: Scrollbar(
                       controller: _scrollController,
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      itemCount: groupedChats.length,
-                      itemBuilder: (ctx, groupIndex) {
-                        final groupEntry = groupedChats.entries.elementAt(
-                          groupIndex,
-                        );
-                        final groupName = groupEntry.key;
-                        final chats = groupEntry.value;
+                      child: ListView.builder(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        itemCount: groupedChats.length,
+                        itemBuilder: (ctx, groupIndex) {
+                          final groupEntry = groupedChats.entries.elementAt(
+                            groupIndex,
+                          );
+                          final groupName = groupEntry.key;
+                          final chats = groupEntry.value;
 
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                              child: Text(
-                                groupName,
-                                style: TextStyle(
-                                  color: cs.onSurface.withOpacity(0.5),
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  letterSpacing: 0.8,
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  16,
+                                  16,
+                                  8,
+                                ),
+                                child: Text(
+                                  groupName,
+                                  style: TextStyle(
+                                    color: cs.onSurface.withOpacity(0.5),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: 0.8,
+                                  ),
                                 ),
                               ),
-                            ),
-                            ...chats.map((chat) {
-                              final chatId = chat['id'] as int;
-                              final isSelected = _selectedChatId == chatId;
-                              final isHovered = _hoveredChatId == chatId;
-                              final updated =
-                                  DateTime.fromMillisecondsSinceEpoch(
-                                    chat['updated_at'] as int,
-                                  );
+                              ...chats.map((chat) {
+                                final chatId = chat['id'] as int;
+                                final isSelected = _selectedChatId == chatId;
+                                final isHovered = _hoveredChatId == chatId;
+                                final updated =
+                                    DateTime.fromMillisecondsSinceEpoch(
+                                      chat['updated_at'] as int,
+                                    );
 
-                              return Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 2,
-                                ),
-                                child: MouseRegion(
-                                  onEnter: (_) {
-                                    setState(() => _hoveredChatId = chatId);
-                                  },
-                                  onExit: (_) {
-                                    setState(() => _hoveredChatId = null);
-                                  },
-                                  child: Material(
-                                    color: Colors.transparent,
-                                    child: InkWell(
-                                      onTap: () {
-                                        setState(
-                                          () => _selectedChatId = chatId,
-                                        );
-                                        debugPrint(chatId.toString());
-                                        widget.laodMessages(chatId);
-                                      },
-                                      borderRadius: BorderRadius.circular(8),
-                                      child: AnimatedContainer(
-                                        duration: const Duration(
-                                          milliseconds: 150,
-                                        ),
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                          vertical: 8,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: isSelected
-                                              ? cs.primary
-                                              : isHovered
-                                              ? cs.surfaceContainerHighest
-                                              : Colors.transparent,
-                                          borderRadius: BorderRadius.circular(
-                                            8,
+                                return Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 2,
+                                  ),
+                                  child: MouseRegion(
+                                    onEnter: (_) {
+                                      setState(() => _hoveredChatId = chatId);
+                                    },
+                                    onExit: (_) {
+                                      setState(() => _hoveredChatId = null);
+                                    },
+                                    child: Material(
+                                      color: Colors.transparent,
+                                      child: InkWell(
+                                        onTap: () {
+                                          setState(
+                                            () => _selectedChatId = chatId,
+                                          );
+                                          debugPrint(chatId.toString());
+                                          widget.laodMessages(chatId);
+                                        },
+                                        borderRadius: BorderRadius.circular(8),
+                                        child: AnimatedContainer(
+                                          duration: const Duration(
+                                            milliseconds: 150,
                                           ),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            Expanded(
-                                              child: Text(
-                                                chat['title'] ?? 'Untitled',
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                            vertical: 8,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: isSelected
+                                                ? cs.primary.withOpacity(0.15)
+                                                : isHovered
+                                                ? cs.surfaceVariant
+                                                : Colors.transparent,
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Expanded(
+                                                child: Text(
+                                                  chat['title'] ?? 'Untitled',
+                                                  style: TextStyle(
+                                                    color: isSelected
+                                                        ? cs.onPrimary
+                                                        : cs.onSurface,
+                                                    fontSize: 13,
+                                                    fontWeight: isSelected
+                                                        ? FontWeight.w600
+                                                        : FontWeight.w400,
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Text(
+                                                _getRelativeTime(updated),
                                                 style: TextStyle(
                                                   color: isSelected
                                                       ? cs.onPrimary
-                                                      : cs.onSurface,
-                                                  fontSize: 13,
-                                                  fontWeight: isSelected
-                                                      ? FontWeight.w600
-                                                      : FontWeight.w400,
+                                                            .withOpacity(0.7)
+                                                      : cs.onSurface
+                                                            .withOpacity(0.4),
+                                                  fontSize: 10,
                                                 ),
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
                                               ),
-                                            ),
-                                            const SizedBox(width: 8),
-                                            Text(
-                                              _getRelativeTime(updated),
-                                              style: TextStyle(
-                                                color: isSelected
-                                                    ? cs.onPrimary.withOpacity(
-                                                        0.7,
-                                                      )
-                                                    : cs.onSurface.withOpacity(
-                                                        0.4,
-                                                      ),
-                                                fontSize: 10,
-                                              ),
-                                            ),
-                                          ],
+                                            ],
+                                          ),
                                         ),
                                       ),
                                     ),
                                   ),
-                                ),
-                              );
-                            }).toList(),
-                          ],
-                        );
-                      },
+                                );
+                              }).toList(),
+                            ],
+                          );
+                        },
+                      ),
                     ),
                   ),
           ),

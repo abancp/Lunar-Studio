@@ -69,30 +69,43 @@ class _TopPanelState extends State<TopPanel> {
                     child: Opacity(
                       opacity: widget.selectedModel == "Select Model" ? 0.3 : 1,
                       child: Container(
-                        height: 26,
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        height: 28,
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
                         decoration: BoxDecoration(
                           color: widget.selectedModel == widget.loadedModel
-                              ? cs.surface
+                              ? Colors.transparent
                               : cs.primary,
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(color: cs.outline, width: 1),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: widget.selectedModel == widget.loadedModel
+                                ? cs.outline
+                                : cs.primary,
+                            width: 1,
+                          ),
                         ),
                         child: Row(
                           children: [
                             Icon(
-                              BootstrapIcons.eject,
+                              widget.selectedModel == widget.loadedModel
+                                  ? BootstrapIcons.stop_circle
+                                  : BootstrapIcons.play_circle,
                               size: 12,
-                              color: cs.onSurface,
+                              color: widget.selectedModel == widget.loadedModel
+                                  ? cs.onSurface
+                                  : cs.onPrimary,
                             ),
-                            const SizedBox(width: 4),
+                            const SizedBox(width: 6),
                             Text(
                               widget.selectedModel == widget.loadedModel
                                   ? "Eject"
                                   : "Load",
                               style: TextStyle(
-                                color: cs.onSurface,
+                                color:
+                                    widget.selectedModel == widget.loadedModel
+                                    ? cs.onSurface
+                                    : cs.onPrimary,
                                 fontSize: 12,
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
                           ],

@@ -9,7 +9,7 @@ import 'package:flutter_highlight/flutter_highlight.dart';
 import 'package:flutter_highlight/themes/vs2015.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:motion_toast/motion_toast.dart';
-import 'package:path/path.dart' as p;
+import 'package:bootstrap_icons/bootstrap_icons.dart';
 
 // --- 1. DATA STRUCTURES (Unified) ---
 
@@ -24,7 +24,7 @@ enum ChunkType {
   latexBlock,
 }
 
-enum SpanType { plain, bold, latexInline }
+enum SpanType { plain, bold, latexInline, inlineCode }
 
 // Replaces the old _TextSpan class
 class _Span {
@@ -44,12 +44,12 @@ class _Chunk {
 
 // --- 2. PARSING LOGIC ---
 
-/// Unified parser: Handles **Bold** and \( Latex \)
+/// Unified parser: Handles **Bold**, \( Latex \), and `Inline Code`
 List<_Span> _parseRichText(String text) {
   final List<_Span> spans = [];
 
-  // Regex matches: \( ... \) OR ** ... **
-  final regex = RegExp(r'(\\\(.*?\\\))|(\*\*.*?\*\*)');
+  // Regex matches: \( ... \) OR ** ... ** OR ` ... `
+  final regex = RegExp(r'(\\\(.*?\\\))|(\*\*.*?\*\*)|(`.*?`)');
 
   int start = 0;
   for (final match in regex.allMatches(text)) {
@@ -63,6 +63,10 @@ List<_Span> _parseRichText(String text) {
       // Inline Math: Remove \( and \)
       final cleanMath = matchText.substring(2, matchText.length - 2);
       spans.add(_Span(cleanMath, SpanType.latexInline));
+    } else if (matchText.startsWith('`')) {
+      // Inline Code: Remove ` and `
+      final cleanCode = matchText.substring(1, matchText.length - 1);
+      spans.add(_Span(cleanCode, SpanType.inlineCode));
     } else {
       // Bold: Remove ** and **
       final cleanBold = matchText.substring(2, matchText.length - 2);
@@ -78,7 +82,6 @@ List<_Span> _parseRichText(String text) {
   return spans;
 }
 
-bool _hasClosedThinkTag(String text) => text.contains('</search>');
 bool _hasOpenThinkTag(String text) => text.contains('<search>');
 
 List<_Chunk> parseTextToChunks(String text) {
@@ -232,26 +235,34 @@ void _splitPlainIntoStructure(String text, List<_Chunk> chunks) {
 
     if (line.isEmpty) continue;
 
-    if (line.startsWith('### ')) {
+    if (trimmed.startsWith('#### ')) {
       chunks.add(
         _Chunk(
-          _parseRichText(line.substring(4).trimLeft()),
+          _parseRichText(trimmed.substring(4).trimLeft()),
+          ChunkType.heading,
+          metadata: {'level': 4},
+        ),
+      );
+    } else if (trimmed.startsWith('### ')) {
+      chunks.add(
+        _Chunk(
+          _parseRichText(trimmed.substring(3).trimLeft()),
           ChunkType.heading,
           metadata: {'level': 3},
         ),
       );
-    } else if (line.startsWith('## ')) {
+    } else if (trimmed.startsWith('## ')) {
       chunks.add(
         _Chunk(
-          _parseRichText(line.substring(3).trimLeft()),
+          _parseRichText(trimmed.substring(2).trimLeft()),
           ChunkType.heading,
           metadata: {'level': 2},
         ),
       );
-    } else if (line.startsWith('# ')) {
+    } else if (trimmed.startsWith('# ')) {
       chunks.add(
         _Chunk(
-          _parseRichText(line.substring(2).trimLeft()),
+          _parseRichText(trimmed.substring(1).trimLeft()),
           ChunkType.heading,
           metadata: {'level': 1},
         ),
@@ -261,10 +272,10 @@ void _splitPlainIntoStructure(String text, List<_Chunk> chunks) {
       if (bulletText.isNotEmpty) {
         chunks.add(_Chunk(_parseRichText(bulletText), ChunkType.bullet));
       }
-    } else if (trimmed.startsWith('> ')) {
+    } else if (trimmed.startsWith('>')) {
       chunks.add(
         _Chunk(
-          _parseRichText(trimmed.substring(2).trimLeft()),
+          _parseRichText(trimmed.substring(1).trimLeft()),
           ChunkType.blockquote,
         ),
       );
@@ -479,11 +490,7 @@ class MainPanelState extends State<MainPanel> {
 
     return Container(
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [cs.surfaceVariant.withOpacity(0.35), cs.background],
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-        ),
+        color: cs.background, // Clean solid background
       ),
       child: messages.isNotEmpty
           ? Column(
@@ -515,12 +522,19 @@ class MainPanelState extends State<MainPanel> {
                             child: DecoratedBox(
                               decoration: isUser
                                   ? BoxDecoration(
-                                      color: cs.primary.withOpacity(0.12),
+                                      gradient: LinearGradient(
+                                        colors: [
+                                          cs.primary.withOpacity(0.2),
+                                          cs.primary.withOpacity(0.05),
+                                        ],
+                                        begin: Alignment.topRight,
+                                        end: Alignment.bottomLeft,
+                                      ),
                                       borderRadius: BorderRadius.circular(
                                         width < 600 ? 12 : 16,
                                       ),
                                       border: Border.all(
-                                        color: cs.outline.withOpacity(0.6),
+                                        color: cs.primary.withOpacity(0.3),
                                       ),
                                     )
                                   : const BoxDecoration(),
@@ -575,9 +589,19 @@ class MainPanelState extends State<MainPanel> {
                 vertical: width < 600 ? 4 : 6,
               ),
               decoration: BoxDecoration(
-                color: cs.background.withOpacity(0.9),
-                borderRadius: BorderRadius.circular(width < 600 ? 16 : 18),
-                border: Border.all(color: cs.outline, width: 1),
+                color: cs.surface,
+                borderRadius: BorderRadius.circular(24), // More rounded
+                border: Border.all(
+                  color: cs.outline.withOpacity(0.5),
+                  width: 1,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.end,
@@ -620,12 +644,12 @@ class MainPanelState extends State<MainPanel> {
                           end: Alignment.bottomRight,
                         ),
                         borderRadius: BorderRadius.circular(
-                          width < 600 ? 8 : 10,
-                        ),
+                          20,
+                        ), // Rounded submit button
                       ),
                       child: Icon(
-                        Icons.arrow_upward_rounded,
-                        size: width < 600 ? 18 : 20,
+                        BootstrapIcons.arrow_up, // Cleaner arrow icon
+                        size: 20,
                         color: cs.onPrimary,
                       ),
                     ),
@@ -682,8 +706,6 @@ class MessageBubble extends StatefulWidget {
 }
 
 class _MessageBubbleState extends State<MessageBubble> {
-  bool _showThinking = false;
-
   Widget _buildRichText(List<_Span> spans, TextStyle baseStyle) {
     return RichText(
       text: TextSpan(
@@ -823,14 +845,12 @@ class _MessageBubbleState extends State<MessageBubble> {
 
         final List<Widget> children = [];
         bool hasThinking = false;
-        final List<_Chunk> thinkingChunks = [];
 
         for (int i = 0; i < chunks.length; i++) {
           final c = chunks[i];
           switch (c.type) {
             case ChunkType.thinking:
               hasThinking = true;
-              thinkingChunks.add(c);
               break;
             case ChunkType.code:
               children.add(
@@ -847,6 +867,7 @@ class _MessageBubbleState extends State<MessageBubble> {
               final level = c.metadata?['level'] ?? 1;
               double fontSize = 24.0;
               if (level == 2) fontSize = 20.0;
+              if (level == 3) fontSize = 18.0;
               if (level == 3) fontSize = 17.0;
               children.add(
                 Padding(
@@ -905,14 +926,7 @@ class _MessageBubbleState extends State<MessageBubble> {
                 Container(
                   margin: const EdgeInsets.symmetric(vertical: 8),
                   padding: const EdgeInsets.only(left: 12, top: 2, bottom: 2),
-                  decoration: BoxDecoration(
-                    border: Border(
-                      left: BorderSide(
-                        color: cs.primary.withOpacity(0.5),
-                        width: 3,
-                      ),
-                    ),
-                  ),
+                  // Removed the border decoration as per user request to remove the "|" bar
                   child: _buildRichText(
                     c.spans,
                     widget.plainStyle.copyWith(
@@ -961,23 +975,26 @@ class _MessageBubbleState extends State<MessageBubble> {
           }
         }
 
-        if (hasThinking) {
+        if (hasThinking || widget.msg.isThinkingActive) {
+          // We pass the "isThinkingActive" state to the section
+          // The section itself will handle the minimum duration logic and visibility
+          // But we need to keep it in the tree if we want it to animate out gracefully or hold presence
+          // However, for "minimum 1s", the widget needs to stay mounted.
+
+          // If 'hasThinking' is true, it means there are thinking chunks (which we hide content of)
+          // If 'isThinkingActive' from msg is true, we are generating thought.
+
+          // We rely on ThinkingSection to decide whether to render nothing or the label
           children.insert(
             0,
             ThinkingSection(
               key: ValueKey('thinking_${widget.msg.hashCode}'),
-              chunks: thinkingChunks,
-              thinkingStyle: widget.thinkingStyle,
-              isExpanded: _showThinking,
               isThinkingActive: widget.msg.isThinkingActive,
-              thinkingDuration: widget.msg.thinkingDuration,
-              onToggle: () {
-                setState(() {
-                  _showThinking = !_showThinking;
-                });
-              },
             ),
           );
+          if (widget.msg.isThinkingActive) {
+            children.insert(1, const SizedBox(height: 8));
+          }
         }
 
         return Column(
@@ -991,243 +1008,146 @@ class _MessageBubbleState extends State<MessageBubble> {
 }
 
 class ThinkingSection extends StatefulWidget {
-  final List<_Chunk> chunks;
-  final TextStyle thinkingStyle;
-  final bool isExpanded;
   final bool isThinkingActive;
-  final double thinkingDuration;
-  final VoidCallback onToggle;
 
-  const ThinkingSection({
-    required this.chunks,
-    required this.thinkingStyle,
-    required this.isExpanded,
-    required this.isThinkingActive,
-    required this.thinkingDuration,
-    required this.onToggle,
-    super.key,
-  });
+  const ThinkingSection({required this.isThinkingActive, super.key});
 
   @override
   State<ThinkingSection> createState() => _ThinkingSectionState();
 }
 
-class _ThinkingSectionState extends State<ThinkingSection>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _iconController;
+class _ThinkingSectionState extends State<ThinkingSection> {
+  bool _isVisible = false;
+  Timer? _minDisplayTimer;
+  DateTime? _startTime;
 
   @override
   void initState() {
     super.initState();
-    _iconController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 200),
-    );
+    if (widget.isThinkingActive) {
+      _isVisible = true;
+      _startTime = DateTime.now();
+    }
   }
 
   @override
   void didUpdateWidget(ThinkingSection oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.isExpanded)
-      _iconController.forward();
-    else
-      _iconController.reverse();
-  }
-
-  @override
-  void dispose() {
-    _iconController.dispose();
-    super.dispose();
-  }
-
-  Widget _buildRichText(List<_Span> spans, TextStyle baseStyle) {
-    return RichText(
-      text: TextSpan(
-        children: spans.map((span) {
-          if (span.type == SpanType.bold) {
-            return TextSpan(
-              text: span.text,
-              style: baseStyle.copyWith(fontWeight: FontWeight.bold),
-            );
+    if (widget.isThinkingActive && !oldWidget.isThinkingActive) {
+      // Started thinking
+      _isVisible = true;
+      _startTime = DateTime.now();
+      _minDisplayTimer?.cancel();
+    } else if (!widget.isThinkingActive && oldWidget.isThinkingActive) {
+      // Stopped thinking. Check if we need to keep showing it.
+      final duration = DateTime.now().difference(_startTime!);
+      if (duration.inMilliseconds < 1000) {
+        // Less than 1 second, keep showing until then
+        final remaining = 1000 - duration.inMilliseconds;
+        _minDisplayTimer = Timer(Duration(milliseconds: remaining), () {
+          if (mounted) {
+            setState(() {
+              _isVisible = false;
+            });
           }
-          return TextSpan(text: span.text, style: baseStyle);
-        }).toList(),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: widget.onToggle,
-            hoverColor: Colors.transparent,
-            splashColor: Colors.transparent,
-            highlightColor: Colors.transparent,
-            focusColor: Colors.transparent,
-            mouseCursor: SystemMouseCursors.click,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _AnimatedThinkingLabel(
-                  colorScheme: cs,
-                  isThinkingActive: widget.isThinkingActive,
-                  thinkingDuration: widget.thinkingDuration,
-                ),
-                const SizedBox(width: 4),
-                AnimatedBuilder(
-                  animation: _iconController,
-                  builder: (context, child) => Transform.rotate(
-                    angle: _iconController.value * 3.14159,
-                    child: Icon(
-                      Icons.keyboard_arrow_down_rounded,
-                      size: 18,
-                      color: cs.primary.withOpacity(0.8),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        AnimatedSize(
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeInOut,
-          child: widget.isExpanded
-              ? Container(
-                  margin: const EdgeInsets.only(top: 4, bottom: 8),
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: cs.surfaceVariant.withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: cs.outline.withOpacity(0.2)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: widget.chunks
-                        .map(
-                          (chunk) => Padding(
-                            padding: const EdgeInsets.only(bottom: 4),
-                            child: _buildRichText(
-                              chunk.spans,
-                              widget.thinkingStyle,
-                            ),
-                          ),
-                        )
-                        .toList(),
-                  ),
-                )
-              : const SizedBox.shrink(),
-        ),
-      ],
-    );
-  }
-}
-
-class _AnimatedThinkingLabel extends StatefulWidget {
-  final ColorScheme colorScheme;
-  final bool isThinkingActive;
-  final double thinkingDuration;
-
-  const _AnimatedThinkingLabel({
-    required this.colorScheme,
-    required this.isThinkingActive,
-    required this.thinkingDuration,
-  });
-
-  @override
-  State<_AnimatedThinkingLabel> createState() => _AnimatedThinkingLabelState();
-}
-
-class _AnimatedThinkingLabelState extends State<_AnimatedThinkingLabel>
-    with SingleTickerProviderStateMixin {
-  AnimationController? _controller;
-  Animation<double>? _animation;
-
-  @override
-  void initState() {
-    super.initState();
-    _initializeController();
-  }
-
-  void _initializeController() {
-    _controller?.dispose();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    );
-    _animation = Tween<double>(
-      begin: -1.0,
-      end: 2.0,
-    ).animate(CurvedAnimation(parent: _controller!, curve: Curves.linear));
-    if (widget.isThinkingActive) _controller!.repeat();
-  }
-
-  @override
-  void didUpdateWidget(_AnimatedThinkingLabel oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.isThinkingActive != widget.isThinkingActive) {
-      if (widget.isThinkingActive) {
-        if (_controller != null) _controller!.repeat();
+        });
       } else {
-        if (_controller != null) {
-          _controller!.stop();
-          _controller!.reset();
-        }
+        _isVisible = false;
       }
     }
   }
 
   @override
   void dispose() {
-    _controller?.dispose();
+    _minDisplayTimer?.cancel();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    String displayText = widget.isThinkingActive
-        ? 'Thinking'
-        : (widget.thinkingDuration > 0
-              ? 'Thought for ${widget.thinkingDuration.toStringAsFixed(1)} seconds'
-              : 'Thinking');
-    if (!widget.isThinkingActive || _controller == null || _animation == null) {
-      return Text(
-        displayText,
-        style: TextStyle(
-          color: widget.colorScheme.primary.withOpacity(0.7),
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-        ),
-      );
-    }
+    if (!_isVisible) return const SizedBox.shrink();
+
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: _AnimatedSearchingLabel(colorScheme: cs),
+    );
+  }
+}
+
+class _AnimatedSearchingLabel extends StatefulWidget {
+  final ColorScheme colorScheme;
+
+  const _AnimatedSearchingLabel({required this.colorScheme});
+
+  @override
+  State<_AnimatedSearchingLabel> createState() =>
+      _AnimatedSearchingLabelState();
+}
+
+class _AnimatedSearchingLabelState extends State<_AnimatedSearchingLabel>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _shimmerController;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat();
+
+    _shimmerController = Tween<double>(begin: -1.0, end: 2.0).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOutSine),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: _animation!,
+      animation: _shimmerController,
       builder: (context, child) {
         return ShaderMask(
-          shaderCallback: (bounds) => LinearGradient(
-            begin: Alignment(_animation!.value, 0.0),
-            end: Alignment(_animation!.value - 0.5, 0.0),
-            colors: [
-              widget.colorScheme.primary.withOpacity(0.3),
-              widget.colorScheme.primary.withOpacity(0.9),
-              widget.colorScheme.primary.withOpacity(0.3),
+          blendMode: BlendMode.srcIn,
+          shaderCallback: (bounds) {
+            return LinearGradient(
+              colors: [
+                widget.colorScheme.onSurface.withOpacity(0.3),
+                widget.colorScheme.primary,
+                widget.colorScheme.onSurface.withOpacity(0.3),
+              ],
+              stops: const [0.0, 0.5, 1.0],
+              begin: Alignment(_shimmerController.value - 1.0, 0.0),
+              end: Alignment(_shimmerController.value + 1.0, 0.0),
+              tileMode: TileMode.clamp,
+            ).createShader(bounds);
+          },
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                BootstrapIcons.search,
+                size: 14,
+                color: widget.colorScheme.onSurface,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Searching...',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: 0.5,
+                  color: widget.colorScheme.onSurface,
+                ),
+              ),
             ],
-            stops: const [0.0, 0.5, 1.0],
-          ).createShader(bounds),
-          child: Text(
-            displayText,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
           ),
         );
       },

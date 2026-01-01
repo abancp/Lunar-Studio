@@ -41,7 +41,7 @@ class _ModelDropdownState extends State<ModelDropdown> {
     try {
       final dir = await getApplicationSupportDirectory();
       final modelDir = Directory("${dir.path}/models");
-      
+
       if (!modelDir.existsSync()) {
         modelDir.createSync(recursive: true);
       }
@@ -107,7 +107,7 @@ class _ModelDropdownState extends State<ModelDropdown> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    
+
     return CompositedTransformTarget(
       link: _layerLink,
       child: GestureDetector(
@@ -116,35 +116,30 @@ class _ModelDropdownState extends State<ModelDropdown> {
           height: 36,
           padding: const EdgeInsets.symmetric(horizontal: 14),
           decoration: BoxDecoration(
-            color: cs.primary,
+            color: isOpen ? cs.primary.withOpacity(0.1) : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-              color: isOpen ? cs.onPrimary.withOpacity(0.3) : cs.outline,
-              width: 1.5,
+              color: isOpen
+                  ? cs.primary.withOpacity(0.5)
+                  : cs.outline.withOpacity(0.5),
+              width: 1,
             ),
-            boxShadow: [
-              BoxShadow(
-                color: cs.shadow.withOpacity(0.1),
-                blurRadius: 4,
-                offset: const Offset(0, 2),
-              ),
-            ],
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
-                BootstrapIcons.cloud_download,
-                size: 16,
-                color: cs.onPrimary,
+                BootstrapIcons.box_seam, // Changed icon for a more modern look
+                size: 14,
+                color: isOpen ? cs.primary : cs.onSurface,
               ),
               const SizedBox(width: 10),
               Flexible(
                 child: Text(
                   widget.selectedModel,
                   style: TextStyle(
-                    color: cs.onPrimary,
-                    fontSize: 14,
+                    color: isOpen ? cs.primary : cs.onSurface,
+                    fontSize: 13,
                     fontWeight: FontWeight.w500,
                   ),
                   overflow: TextOverflow.ellipsis,
@@ -156,8 +151,8 @@ class _ModelDropdownState extends State<ModelDropdown> {
                 isOpen
                     ? BootstrapIcons.chevron_up
                     : BootstrapIcons.chevron_down,
-                size: 14,
-                color: cs.onPrimary,
+                size: 12,
+                color: isOpen ? cs.primary : cs.onSurface.withOpacity(0.7),
               ),
             ],
           ),
@@ -228,7 +223,7 @@ class _DropdownOverlayState extends State<_DropdownOverlay>
         children: [
           // Backdrop
           Container(color: Colors.transparent),
-          
+
           // Dropdown menu
           CompositedTransformFollower(
             link: widget.layerLink,
@@ -239,7 +234,10 @@ class _DropdownOverlayState extends State<_DropdownOverlay>
               child: FadeTransition(
                 opacity: _animation,
                 child: ScaleTransition(
-                  scale: Tween<double>(begin: 0.95, end: 1.0).animate(_animation),
+                  scale: Tween<double>(
+                    begin: 0.95,
+                    end: 1.0,
+                  ).animate(_animation),
                   alignment: Alignment.topCenter,
                   child: Material(
                     elevation: 8,
@@ -254,9 +252,16 @@ class _DropdownOverlayState extends State<_DropdownOverlay>
                         color: cs.surface,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: cs.outline.withOpacity(0.2),
+                          color: cs.outline.withOpacity(0.5),
                           width: 1,
                         ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.2),
+                            blurRadius: 16,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
                       ),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(12),
@@ -329,10 +334,7 @@ class _DropdownOverlayState extends State<_DropdownOverlay>
           onTap: () => widget.onSelect(model),
           hoverColor: cs.primary.withOpacity(0.08),
           child: Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 12,
-            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
               color: isSelected
                   ? cs.primary.withOpacity(0.1)
