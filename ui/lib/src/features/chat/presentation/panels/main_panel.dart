@@ -728,6 +728,31 @@ class _MessageBubbleState extends State<MessageBubble> {
               text: span.text,
               style: baseStyle.copyWith(fontWeight: FontWeight.w800),
             );
+          } else if (span.type == SpanType.inlineCode) {
+            // Updated inline code styling
+            return WidgetSpan(
+              alignment: PlaceholderAlignment.middle,
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 2.0),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 4.0,
+                  vertical: 2.0,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: Colors.white.withOpacity(0.1)),
+                ),
+                child: Text(
+                  span.text,
+                  style: baseStyle.copyWith(
+                    fontFamily: 'monospace',
+                    fontSize: (baseStyle.fontSize ?? 14) * 0.9,
+                    color: Colors.white.withOpacity(0.9),
+                  ),
+                ),
+              ),
+            );
           } else {
             return TextSpan(text: span.text, style: baseStyle);
           }
