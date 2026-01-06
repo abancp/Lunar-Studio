@@ -33,7 +33,6 @@ extern "C"
     std::cout << "[API] Prompt: " << std::string(prompt).substr(0, 100)
               << "...\n";
 
-    // -------- Safe C++ → C callback bridge --------
     TokenCallback cpp_cb = nullptr;
 
     if (cb != nullptr)
@@ -120,12 +119,16 @@ extern "C"
       }
 
       if (cpp_cb)
-        cb("</search>");
+        cpp_cb("</search>");
+
+      if(results.size() > 1){
+        results = {results[0]};
+      }
 
       std::string final_response = run_model(prompt_cpp,
-                                             false, // allowSearch = false
+                                             false,
                                              results,
-                                             cpp_cb // Stream tokens to user
+                                             cpp_cb
       );
 
       std::cout << "[API] Final response generated (" << final_response.size()
@@ -133,16 +136,14 @@ extern "C"
     }
     else
     {
-      // -------- No search needed: Direct response --------
       std::cout << "[API] Providing direct response (no search needed)\n";
 
       if (cpp_cb)
       {
-        // Stream the response token by token
         std::string final_response = run_model(prompt_cpp,
-                                               false, // allowSearch = false
+                                               false,
                                                {},
-                                               cpp_cb // Stream tokens to user
+                                               cpp_cb
         );
       }
     }
@@ -164,5 +165,9 @@ extern "C"
     }
 
     return ChatArrayC{c_context, size};
+  }
+
+  void pause_generation(){
+    request_pause();
   }
 }

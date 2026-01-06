@@ -6,6 +6,7 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <atomic>
 
 static llama_model *g_model = nullptr;
 static const llama_vocab *g_vocab = nullptr;
@@ -27,6 +28,9 @@ static llama_context *g_tools_ctx;
 static std::vector<llama_chat_message> g_tools_messages;
 static int g_cached_tokens_tools = 0;
 static std::vector<llama_token> g_cached_prompt_tokens_tools;
+
+// atomic interrupt of generating
+std::atomic<bool> pause_generation_interrupt = false;
 
 // STABLE system prompt that NEVER changes
 static const char *STABLE_SYSTEM_PROMPT =
@@ -68,10 +72,11 @@ int load_model(const char *model_path)
     return 1;
 
   g_vocab = llama_model_get_vocab(g_model);
-
+  // TODO: dynamic params depends user Hardware
   g_ctx_params = llama_context_default_params();
-  g_ctx_params.n_ctx = 2048 * 4;
-  g_ctx_params.n_batch = 2048;
+  // g_ctx_params.n_ctx = 2048 * 4;
+  g_ctx_params.n_ctx = 2048 * 2;
+  g_ctx_params.n_batch = 1024;
   g_ctx_params.n_threads = std::thread::hardware_concurrency();
   g_ctx_params.n_threads_batch = std::thread::hardware_concurrency();
 
@@ -143,6 +148,7 @@ Rules:
 - Do not expand the query beyond the essential concept.
 - Look at the history and also any relevent chat already there
 - Output exactly one line. Never answer the user.
+- Only search if external information needed . dont search for any calculation or doing tasks like format answer , shorten answer...
 USER_MSG:
  )" +
          user_prompt;
@@ -155,15 +161,13 @@ static std::string build_answer_instruction(const std::string &user_prompt,
   if (search_results.size() > 0)
   {
     std::string instruction =
-        R"(Answer the question using the provided search results below.
+        R"(
+        Answer the question using the provided search results below if only SEARCH_RESULTS contains the answer for the question.
 
         INSTRUCTIONS:
-        - Use information from SEARCH_RESULTS
         - Synthesize information clearly and concisely
         - If results don't contain the answer, say your answer
-        - You must always answer in a clear, structured format.
-          Use headings, subheadings, bullet points, short paragraphs, and examples when appropriate.
-          Respond professionally and avoid long unstructured text.
+        - You must always answer in a clear, structured format. Use headings, subheadings, bullet points, short paragraphs, and examples when appropriate. Respond professionally and avoid long unstructured text.
         QUESTION:
         )" +
         user_prompt + "\n\nSEARCH RESULTS:\n";
@@ -173,6 +177,8 @@ static std::string build_answer_instruction(const std::string &user_prompt,
       instruction +=
           "[" + std::to_string(i + 1) + "] " + search_results[i] + "\n\n";
     }
+
+    instruction += "  -  Give formtted well structured answers";
 
     return instruction;
   }
@@ -202,6 +208,7 @@ std::string llm_inference(
     TokenCallback cb)
 {
   messages.push_back({"user", strdup(prompt.c_str())});
+  pause_generation_interrupt.store(false);
 
   std::cout << "[DEBUG] Total messages in history: " << messages.size() << "\n";
 
@@ -289,6 +296,11 @@ std::string llm_inference(
 
   while (true)
   {
+    // if (pause_generation_interrupt.load())
+    // {
+    //   break;
+    // }
+
     llama_token tok = llama_sampler_sample(smplr, ctx, -1);
 
     char buf[256];
@@ -318,6 +330,7 @@ std::string llm_inference(
       break;
 
     cached_tokens++;
+    std::this_thread::sleep_for(std::chrono::milliseconds(7));
   }
 
   return raw_response;
@@ -385,6 +398,7 @@ std::string run_model(std::string prompt, bool allowSearch,
   }
   else
   {
+    g_tools_messages.push_back({"assistant", strdup(response_for_history.c_str())});
     g_messages.push_back({"assistant", strdup(response_for_history.c_str())});
   }
   std::cout << "[DEBUG] ========== TURN END ==========\n\n";
@@ -392,8 +406,12 @@ std::string run_model(std::string prompt, bool allowSearch,
   return raw_response;
 }
 
-// For debug live context
 std::vector<llama_chat_message> get_context()
 {
   return g_messages;
+}
+
+void request_pause()
+{
+  pause_generation_interrupt.store(true);
 }
