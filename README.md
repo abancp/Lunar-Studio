@@ -1,6 +1,6 @@
 # LunarStudio – Lightweight Local AI Desktop App (C++ + llama.cpp)
 
-LunarStudio is a fast, privacy‑focused offline AI assistant built using **C++**, **Qt/QML**, **FAISS**, **SQLite**, and **llama.cpp**.
+LunarStudio is a fast, privacy‑focused offline AI assistant built using **C++**, **Flutter**, **FAISS**, **SQLite**, and **llama.cpp**.
 It performs vector search, embedding generation, and LLM inference fully offline inside your system.
 
 ---
@@ -25,7 +25,7 @@ Before running LunarStudio, download the following models into the **models** fo
 cd models/
 wget https://huggingface.co/leliuga/all-MiniLM-L6-v2-GGUF/resolve/main/all-MiniLM-L6-v2.F16.gguf
 
-### 2. Qwen2.5 0.5B Instruct (Main LLM)
+### 2. Qwen2.5 0.5B Instruct (Main LLM) (We releasing fine tuned model soon..)
 
 cd models/
 wget https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q8_0.gguf
@@ -34,24 +34,16 @@ wget https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5
 
 ## 🔧 Building the Project
 
-### Dependencies (example for Arch Linux)
+### Dependencies 
 
-sudo pacman -S qt6-base qt6-declarative qt6-tools cmake make gcc faiss sqlite openblas lapack nlohmann-json
+cmake make gcc faiss sqlite openblas lapack nlohmann-json llama.cpp 
 
 ### Build Steps
 
-cd lunar-studio
+cd lunar-studio/engine
 mkdir build && cd build
 cmake ..
 make -j$(nproc)
-
----
-
-## ▶️ Running
-
-### CLI:
-
-./LunarStudio
 
 ---
 
@@ -60,12 +52,6 @@ make -j$(nproc)
 1. Embeddings generated using MiniLM
 2. FAISS vector search
 3. Qwen2.5 LLM generates response
-
----
-
-## 🛠 Development
-
-(C++): src/_.cpp, include/_.hpp
 
 ---
 
