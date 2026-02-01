@@ -6,6 +6,7 @@
         "faiss",
         "ggml",
         "gguf",
+        "GROQ",
         "INVOKABLE",
         "logits",
         "lunarstudio",

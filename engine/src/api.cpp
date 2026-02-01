@@ -121,15 +121,15 @@ extern "C"
       if (cpp_cb)
         cpp_cb("</search>");
 
-      if(results.size() > 1){
+      if (results.size() > 1)
+      {
         results = {results[0]};
       }
 
       std::string final_response = run_model(prompt_cpp,
                                              false,
                                              results,
-                                             cpp_cb
-      );
+                                             cpp_cb);
 
       std::cout << "[API] Final response generated (" << final_response.size()
                 << " chars)\n";
@@ -143,8 +143,7 @@ extern "C"
         std::string final_response = run_model(prompt_cpp,
                                                false,
                                                {},
-                                               cpp_cb
-        );
+                                               cpp_cb);
       }
     }
 
@@ -167,7 +166,8 @@ extern "C"
     return ChatArrayC{c_context, size};
   }
 
-  void pause_generation(){
+  void pause_generation()
+  {
     request_pause();
   }
 }

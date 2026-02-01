@@ -1,6 +1,8 @@
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:bootstrap_icons/bootstrap_icons.dart';
 import 'package:LunarStudio/src/features/settings/presentation/panels/context_settings.dart';
+import 'package:LunarStudio/src/features/settings/presentation/panels/external_api_settings.dart';
 
 class SettingsPopup extends StatefulWidget {
   final List<Map<String, String>> contextList;
@@ -16,6 +18,11 @@ class _SettingsPopupState extends State<SettingsPopup> {
 
   final List<Map<String, dynamic>> _navItems = [
     {'icon': BootstrapIcons.journal_code, 'label': 'Context', 'id': 'context'},
+    {
+      'icon': BootstrapIcons.cloud,
+      'label': 'External API',
+      'id': 'external_api',
+    },
     {'icon': BootstrapIcons.palette, 'label': 'Appearance', 'id': 'appearance'},
     {'icon': BootstrapIcons.gear, 'label': 'General', 'id': 'general'},
     // To add a new setting:
@@ -194,7 +201,9 @@ class _SettingsPopupState extends State<SettingsPopup> {
     switch (_selectedNavIndex) {
       case 0: // Context
         return ContextSettings(contextList: widget.contextList);
-      case 1: // Appearance
+      case 1: // External API
+        return const ExternalApiSettings();
+      case 2: // Appearance
         return Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -212,7 +221,7 @@ class _SettingsPopupState extends State<SettingsPopup> {
             ],
           ),
         );
-      case 2: // General
+      case 3: // General
         return Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -243,6 +252,10 @@ Future<void> showSettingsPopup(
 ) {
   return showDialog(
     context: context,
-    builder: (context) => SettingsPopup(contextList: contextList),
+    barrierColor: Colors.black.withOpacity(0.1),
+    builder: (context) => BackdropFilter(
+      filter: ui.ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+      child: SettingsPopup(contextList: contextList),
+    ),
   );
 }

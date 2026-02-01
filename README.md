@@ -27,8 +27,8 @@ wget https://huggingface.co/leliuga/all-MiniLM-L6-v2-GGUF/resolve/main/all-MiniL
 
 ### 2. Qwen2.5 0.5B Instruct (Main LLM) (We releasing fine tuned model soon..)
 
-cd models/
 wget https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q8_0.gguf
+
 
 ---
 

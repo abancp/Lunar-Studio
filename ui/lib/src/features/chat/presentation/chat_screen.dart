@@ -33,7 +33,7 @@ class _ChatPageState extends State<ChatPage> {
   void initState() {
     super.initState();
     LLMEngine().init(
-      "/home/abancp/Projects/Lunar-Studio/build/liblunarstudio.so",
+      "/home/abancp/Projects/Lunar-Studio/engine/build/liblunarstudio.so",
     );
   }
 
@@ -198,7 +198,7 @@ class _ChatPageState extends State<ChatPage> {
                     : SizedBox.shrink(),
                 Expanded(
                   child: MainPanel(
-                    key:mainPanelKey,
+                    key: mainPanelKey,
                     engineReady: engineReady,
                     chatId: chatId,
                     setChatId: setChatId,

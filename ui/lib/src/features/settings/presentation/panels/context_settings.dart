@@ -422,7 +422,7 @@ class _ContextSettingsState extends State<ContextSettings> {
                 style: textTheme.bodyMedium!.copyWith(
                   fontSize: _fontSize,
                   height: 1.5,
-                  fontFamily: 'monospace', // Often better for LLM debug
+                  fontFamily: 'monospace',
                 ),
               ),
             ),

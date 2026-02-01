@@ -14,6 +14,7 @@ include_directories(${SQLite3_INCLUDE_DIRS})
 find_package(OpenMP REQUIRED)
 find_package(BLAS REQUIRED)
 find_package(LAPACK REQUIRED)
+find_package(CURL REQUIRED)
 
 # JSON
 find_path(JSON_INCLUDE_DIR nlohmann/json.hpp)
@@ -55,6 +56,7 @@ add_library(lunarstudio SHARED
     src/embed.cpp
     src/search.cpp
     src/model.cpp
+    src/external_api.cpp
     src/utils/extract_search_query.cpp
     src/utils/remove_think_blocks.cpp
 )
@@ -65,6 +67,7 @@ target_include_directories(lunarstudio PRIVATE include/utils)
 target_link_libraries(lunarstudio PUBLIC
     llama
     faiss
+    CURL::libcurl
     ${SQLite3_LIBRARIES}
     ${OpenMP_CXX_LIBRARIES}
     ${BLAS_LIBRARIES}

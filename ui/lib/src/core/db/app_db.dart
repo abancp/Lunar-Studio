@@ -19,7 +19,7 @@ class AppDB {
 
     return await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON');
       },
@@ -47,12 +47,29 @@ class AppDB {
           )
         ''');
 
+        await db.execute('''
+          CREATE TABLE settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+          )
+        ''');
+
         await db.execute(
           'CREATE INDEX idx_messages_chat_id ON messages(chat_id)',
         );
         await db.execute(
           'CREATE INDEX idx_messages_sequence ON messages(sequence)',
         );
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS settings (
+              key TEXT PRIMARY KEY,
+              value TEXT NOT NULL
+            )
+          ''');
+        }
       },
     );
   }
