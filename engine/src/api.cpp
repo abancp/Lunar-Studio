@@ -13,12 +13,12 @@
 
 extern "C"
 {
-  const std::string embed_model_path =
-      "/home/abancp/Projects/Lunar-Studio/models/all-MiniLM-L6-v2.F16.gguf";
+  const std::string embed_model_path = "/home/abancp/Projects/Lunar-Studio/"
+                                       "engine/models/all-MiniLM-L6-v2.F16.gguf";
   const std::string db_path =
-      "/home/abancp/Projects/Lunar-Studio/ic/cs/mapping.db";
+      "/home/abancp/Projects/Lunar-Studio/engine/ic/cs/mapping.db";
   const std::string index_path =
-      "/home/abancp/Projects/Lunar-Studio/ic/cs/cpp_index_ivf.index";
+      "/home/abancp/Projects/Lunar-Studio/engine/ic/cs/cpp_index_ivf.index";
 
   void load_llm(const char *model_path)
   {
@@ -121,15 +121,12 @@ extern "C"
       if (cpp_cb)
         cpp_cb("</search>");
 
-      if(results.size() > 1){
+      if (results.size() > 1)
+      {
         results = {results[0]};
       }
 
-      std::string final_response = run_model(prompt_cpp,
-                                             false,
-                                             results,
-                                             cpp_cb
-      );
+      std::string final_response = run_model(prompt_cpp, false, results, cpp_cb);
 
       std::cout << "[API] Final response generated (" << final_response.size()
                 << " chars)\n";
@@ -140,11 +137,7 @@ extern "C"
 
       if (cpp_cb)
       {
-        std::string final_response = run_model(prompt_cpp,
-                                               false,
-                                               {},
-                                               cpp_cb
-        );
+        std::string final_response = run_model(prompt_cpp, false, {}, cpp_cb);
       }
     }
 
@@ -165,9 +158,5 @@ extern "C"
     }
 
     return ChatArrayC{c_context, size};
-  }
-
-  void pause_generation(){
-    request_pause();
   }
 }

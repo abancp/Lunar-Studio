@@ -3,18 +3,14 @@ import 'dart:isolate';
 import 'package:ffi/ffi.dart';
 
 typedef NativeLoadLLM = Void Function();
-typedef NativeGenerate = Void Function(
-  Pointer<Utf8>,
-  Pointer<NativeFunction<NativeCallback>>,
-);
+typedef NativeGenerate =
+    Void Function(Pointer<Utf8>, Pointer<NativeFunction<NativeCallback>>);
 typedef NativeCallback = Void Function(Pointer<Utf8>);
 
 late DynamicLibrary _lib;
 late void Function() _loadLLM;
-late void Function(
-  Pointer<Utf8>,
-  Pointer<NativeFunction<NativeCallback>>,
-) _generate;
+late void Function(Pointer<Utf8>, Pointer<NativeFunction<NativeCallback>>)
+_generate;
 
 late SendPort _mainSend;
 
@@ -22,11 +18,7 @@ int _activeId = -1;
 
 void _tokenTrampoline(Pointer<Utf8> ptr) {
   final token = ptr.toDartString();
-  _mainSend.send({
-    'cmd': 'token',
-    'id': _activeId,
-    'token': token,
-  });
+  _mainSend.send({'cmd': 'token', 'id': _activeId, 'token': token});
 }
 
 void workerMain(SendPort mainSend) async {
@@ -53,9 +45,7 @@ void workerMain(SendPort mainSend) async {
 
       _loadLLM();
       mainSend.send({'cmd': 'ready'});
-    }
-
-    else if (cmd == 'generate') {
+    } else if (cmd == 'generate') {
       final id = msg['id'] as int;
       final prompt = msg['prompt'] as String;
       _activeId = id;
