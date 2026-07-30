@@ -36,7 +36,7 @@ std::atomic<bool> pause_generation_interrupt = false;
 static const char *STABLE_SYSTEM_PROMPT =
     R"SYS(You are LunarStudio, created by Aban Muhammed (AI Researcher & Engineer).
 You are a helpful AI assistant capable of answering questions and searching for information when needed.
-Always provide structured formatted with # Heading , ##Subheading , **BOLD** ,-lists , tables ,etc formatted and helpful responses.)SYS";
+Provide clear, well-structured responses. Use markdown formatting (headings, bold, lists, tables) only when appropriate to enhance readability.)SYS";
 
 static const char *STABLE_SYSTEM_PROMPT_TOOLS =
     R"(Decide if the USER_MSG requires external factual information . 
@@ -162,7 +162,7 @@ build_answer_instruction(const std::string &user_prompt,
         INSTRUCTIONS:
         - Synthesize information clearly and concisely
         - If results don't contain the answer, say your answer
-        - You must always answer in a clear, structured format. Use headings, subheadings, bullet points, short paragraphs, and examples when appropriate. Respond professionally and avoid long unstructured text.
+        - Format your response clearly using markdown when appropriate. Keep answers concise.
         QUESTION:
         )" +
         user_prompt + "\n\nSEARCH RESULTS:\n";
@@ -178,9 +178,7 @@ build_answer_instruction(const std::string &user_prompt,
     return instruction;
   } else {
     std::string instruction = R"(System : You are a helpfull ai assistand 
-      You must always answer in a clear, structured format.
-          Use headings, subheadings, bullet points, short paragraphs, and examples when appropriate.
-          Respond professionally and avoid long unstructured text.
+      Provide clear, concise answers. Use markdown formatting appropriately for readability.
         User :
         )" + user_prompt;
     return instruction;
